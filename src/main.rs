@@ -4,29 +4,36 @@ use tracing::info;
 mod commands;
 use commands::{
     fun::{balls, hello},
-    utility::{ping, status, get_week},
+    utility::{get_week, ping, status},
 };
 
 #[poise::command(slash_command, track_edits)]
 async fn help(
-    ctx: Context<'_>, 
-    #[description = "Command you need help about"] 
-    command: Option<String>
+    ctx: Context<'_>,
+    #[description = "Command you need help about"] command: Option<String>,
 ) -> Result<(), Error> {
     let config = poise::builtins::HelpConfiguration {
         ..Default::default()
     };
 
     poise::builtins::help(ctx, command.as_deref(), config).await?;
-    Ok(()) 
+    Ok(())
 }
 
 async fn pre_command(ctx: Context<'_>) {
-    info!("Running command: {} from {}", ctx.command().qualified_name, ctx.author().name)
+    info!(
+        "{} running command: {}",
+        ctx.author().name,
+        ctx.command().qualified_name
+    )
 }
 
 async fn post_command(ctx: Context<'_>) {
-    info!("Ran command: {} from {}", ctx.command().qualified_name, ctx.author().name)
+    info!(
+        "{} ran command: {}",
+        ctx.author().name,
+        ctx.command().qualified_name
+    )
 }
 
 pub struct Data {}
@@ -37,7 +44,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 async fn main() {
     dotenvy::dotenv().expect(".env file not found");
     tracing_subscriber::fmt::init();
-    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let token = std::env::var("BOT_TOKEN").expect("missing DISCORD_TOKEN");
     let intents = serenity::GatewayIntents::non_privileged();
 
     let framework = poise::Framework::builder()
@@ -58,5 +65,9 @@ async fn main() {
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .await;
-    client.expect("Can't construct client").start().await.expect("Can't start.");
+    client
+        .expect("Can't construct client")
+        .start()
+        .await
+        .expect("Can't start.");
 }

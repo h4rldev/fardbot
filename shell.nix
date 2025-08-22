@@ -1,24 +1,14 @@
-with import <nixpkgs> {};
-
-let
-  pkgs = import <nixpkgs> {};
-in
+{pkgs ? import <nixpkgs> {}}:
+with pkgs;
 mkShell {
   allowUnfree = true;
   name = "h4bot";
-  nativeBuildInputs = with pkgs; [
-    rustup pkgconfig
+  packages = [
+    rustup
   ];
-  buildInputs = with pkgs; [
-    openssl
+  buildInputs = [
+     pkg-config openssl
   ];
-  LD_LIBRARY_PATH = lib.makeLibraryPath [ openssl ];
-  packages = with pkgs; [
-    zsh
-  ];
-  shellHook = ''
-    echo "Welcome to h4bot's nix-shell :)"
-  '';
   # Additional configuration (if needed)
   RUST_BACKTRACE = 1;
 }
