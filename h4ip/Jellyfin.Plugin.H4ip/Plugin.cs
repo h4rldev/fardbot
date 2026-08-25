@@ -26,7 +26,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <inheritdoc />
-    public override string Name => "h4bot/fardbot Integration Plugin (h4ip)";
+    public override string Name => "h4ip";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("d8785d47-e35e-434c-b8ad-2612e1ca87b7");
