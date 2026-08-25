@@ -1,0 +1,49 @@
+name: Build Plugin
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build and package plugin
+        id: build
+        uses: oddstr13/jellyfin-plugin-repository-manager@master
+        with:
+          path: h4ip
+          output: ./artifacts
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.build.outputs.artifact }}
+
+      - name: Generate manifest.json
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: '1'
+        run: |
+          python3 -m pip install jprm
+          test -f manifest.json || jprm repo init manifest.json
+          jprm repo add manifest.json \
+            --url https://github.com/${{ github.repository }}/releases/latest/download \
+            --plugin-url https://github.com/${{ github.repository }}/releases/latest/download/$(basename "${{ steps.build.outputs.artifact }}") \
+            "${{ steps.build.outputs.artifact }}"
+
+      - name: Commit manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "Update plugin manifest for ${{ github.ref_name }}"
+          git push
