@@ -1,10 +1,10 @@
 ---
-name: "h4bot/fardbot Integration Plugin (h4ip)"
+name: "h4ip"
 guid: "d8785d47-e35e-434c-b8ad-2612e1ca87b7"
 version: "1.0.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
-overview: "Integration plugin for h4bot/fardbot for artist suggestions"
+overview: "h4bot/fardbot Integration plugin (h4ip): Artist suggestions, crowns and top listeners."
 description: >
   A small Jellyfin plugin that integrates with h4bot/fardbot for artist suggestions, crowns and top listeners.
 category: "General"
