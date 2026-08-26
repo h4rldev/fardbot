@@ -145,7 +145,7 @@ pub async fn crown(
     ctx.defer().await?;
 
     let search: SearchHints = jf_get(
-        "/Search/Hints",
+        "Search/Hints",
         &[("searchTerm", name.as_str()), ("limit", "10")],
     )
     .await?;
@@ -190,7 +190,7 @@ pub async fn crown(
 
     let limit = limit.unwrap_or(10).to_string();
     let entries: Vec<CrownEntry> = jf_get(
-        "/h4ip/crown",
+        "h4ip/crown",
         &[
             ("kind", kind.as_str()),
             ("name", hint.name.as_str()),
@@ -251,7 +251,7 @@ pub async fn suggest(
 pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
 
-    let sessions: Vec<Session> = jf_get("/Sessions", &[("activeWithinSeconds", "120")]).await?;
+    let sessions: Vec<Session> = jf_get("Sessions", &[("activeWithinSeconds", "120")]).await?;
     let Some(session) = sessions.iter().find(|s| {
         s.now_playing
             .as_ref()
@@ -373,7 +373,7 @@ pub async fn top(
 
     ctx.defer().await?;
     let entries: Vec<TopEntry> = jf_get(
-        "/h4ip/top",
+        "h4ip/top",
         &[
             ("user", user_id.as_str()),
             ("kind", kind.as_str()),
