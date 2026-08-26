@@ -3,6 +3,13 @@
 <head>
     <meta charset="utf-8">
     <title>H4ip</title>
+    <style>
+        .suggestion-action {
+            padding: 0.35em 0.75em;
+            font-size: 0.85em;
+            margin: 0 0.25em;
+        }
+    </style>
 </head>
 <body>
     <div id="H4ipConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
@@ -62,7 +69,8 @@
 
                     var meta = document.createElement('div');
                     meta.className = 'secondary';
-                    meta.textContent = 'Suggested ' + new Date(item.AddedAt).toLocaleString();
+                    var count = item.Count > 1 ? ' · ' + item.Count + '× suggested' : '';
+                    meta.textContent = 'Suggested ' + new Date(item.AddedAt).toLocaleString() + count;
 
                     body.appendChild(name);
                     body.appendChild(meta);
@@ -70,7 +78,7 @@
                     var btn = document.createElement('button');
                     btn.type = 'button';
                     btn.setAttribute('is', 'emby-button');
-                    btn.className = 'button-link';
+                    btn.className = 'raised button-submit emby-button suggestion-action';
                     btn.textContent = 'Done';
                     btn.addEventListener('click', function () {
                         ApiClient.fetch({
@@ -82,7 +90,7 @@
                     var skip = document.createElement('button');
                     skip.type = 'button';
                     skip.setAttribute('is', 'emby-button');
-                    skip.className = 'button-link';
+                    skip.className = 'raised emby-button suggestion-action';
                     skip.textContent = 'Skip';
                     skip.addEventListener('click', function () {
                         ApiClient.fetch({

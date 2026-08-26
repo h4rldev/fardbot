@@ -43,7 +43,7 @@ public class H4ipController : ControllerBase
     public ActionResult<IEnumerable<object>> GetSuggestions([FromQuery] bool all = false)
     {
         var rows = _repository.GetSuggestions(pendingOnly: !all);
-        return Ok(rows.Select(r => new { r.Id, r.Artist, r.AddedAt, r.Done }));
+        return Ok(rows.Select(r => new { r.Id, r.Artist, r.AddedAt, r.Done, r.Count }));
     }
 
     /// <summary>

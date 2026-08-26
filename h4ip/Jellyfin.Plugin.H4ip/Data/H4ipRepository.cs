@@ -46,7 +46,8 @@ public sealed class H4ipRepository : IDisposable
                 Artist TEXT NOT NULL,
                 AddedAt TEXT NOT NULL,
                 Done INTEGER NOT NULL DEFAULT 0,
-                Skipped INTEGER NOT NULL DEFAULT 0
+                Skipped INTEGER NOT NULL DEFAULT 0,
+                Count INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE IF NOT EXISTS PlayCounts (
                 UserId TEXT NOT NULL,
@@ -58,13 +59,21 @@ public sealed class H4ipRepository : IDisposable
             """;
         cmd.ExecuteNonQuery();
 
-        // ponytail: one-time migration for pre-skip databases
+        // ponytail: one-time migrations for pre-skip/pre-count databases
         using var check = _connection.CreateCommand();
         check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Suggestions') WHERE name = 'Skipped'";
         if (Convert.ToInt64(check.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
         {
             using var alter = _connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Suggestions ADD COLUMN Skipped INTEGER NOT NULL DEFAULT 0";
+            alter.ExecuteNonQuery();
+        }
+
+        check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Suggestions') WHERE name = 'Count'";
+        if (Convert.ToInt64(check.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Suggestions ADD COLUMN Count INTEGER NOT NULL DEFAULT 1";
             alter.ExecuteNonQuery();
         }
     }
@@ -77,11 +86,24 @@ public sealed class H4ipRepository : IDisposable
     {
         lock (_lock)
         {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "INSERT INTO Suggestions (Artist, AddedAt, Done) VALUES ($artist, $at, 0)";
-            cmd.Parameters.AddWithValue("$artist", artist);
-            cmd.Parameters.AddWithValue("$at", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
-            cmd.ExecuteNonQuery();
+            using var find = _connection.CreateCommand();
+            find.CommandText = "SELECT Id FROM Suggestions WHERE Artist = $artist COLLATE NOCASE AND Done = 0 AND Skipped = 0";
+            find.Parameters.AddWithValue("$artist", artist);
+            var existingId = find.ExecuteScalar();
+            if (existingId is not null)
+            {
+                using var inc = _connection.CreateCommand();
+                inc.CommandText = "UPDATE Suggestions SET Count = Count + 1 WHERE Id = $id";
+                inc.Parameters.AddWithValue("$id", Convert.ToInt64(existingId, CultureInfo.InvariantCulture));
+                inc.ExecuteNonQuery();
+                return;
+            }
+
+            using var insert = _connection.CreateCommand();
+            insert.CommandText = "INSERT INTO Suggestions (Artist, AddedAt, Done, Skipped, Count) VALUES ($artist, $at, 0, 0, 1)";
+            insert.Parameters.AddWithValue("$artist", artist);
+            insert.Parameters.AddWithValue("$at", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            insert.ExecuteNonQuery();
         }
     }
 
@@ -120,21 +142,21 @@ public sealed class H4ipRepository : IDisposable
     /// </summary>
     /// <param name="pendingOnly">Whether to only return pending suggestions.</param>
     /// <returns>A list of suggestions.</returns>
-    public IReadOnlyList<(long Id, string Artist, string AddedAt, bool Done)> GetSuggestions(bool pendingOnly)
+    public IReadOnlyList<(long Id, string Artist, string AddedAt, bool Done, int Count)> GetSuggestions(bool pendingOnly)
     {
         lock (_lock)
         {
-            var results = new List<(long, string, string, bool)>();
+            var results = new List<(long, string, string, bool, int)>();
             using var cmd = _connection.CreateCommand();
 #pragma warning disable CA2100 // all queries are literals; values are parameterized
             cmd.CommandText = pendingOnly
-                ? "SELECT Id, Artist, AddedAt, Done FROM Suggestions WHERE Done = 0 AND Skipped = 0 ORDER BY AddedAt"
-                : "SELECT Id, Artist, AddedAt, Done FROM Suggestions ORDER BY AddedAt";
+                ? "SELECT Id, Artist, AddedAt, Done, Count FROM Suggestions WHERE Done = 0 AND Skipped = 0 ORDER BY Count DESC, AddedAt"
+                : "SELECT Id, Artist, AddedAt, Done, Count FROM Suggestions ORDER BY Count DESC, AddedAt";
 #pragma warning restore CA2100
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                results.Add((reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetInt64(3) != 0));
+                results.Add((reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetInt64(3) != 0, reader.GetInt32(4)));
             }
 
             return results;
