@@ -116,7 +116,7 @@ impl ItemKind {
         match self {
             ItemKind::Artist => "artist",
             ItemKind::Album => "album",
-            ItemKind::Track => "audio",
+            ItemKind::Track => "track",
         }
     }
 }
