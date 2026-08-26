@@ -108,6 +108,28 @@ public sealed class H4ipRepository : IDisposable
     }
 
     /// <summary>
+    /// Seeds a play count onl if the row doesn't exist yet, aka "idempotent".
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="itemType">The item type.</param>
+    /// <param name="itemName">The item name.</param>
+    /// <param name="count">The count.</param>
+    public void SeedPlayCount(string userId, string itemType, string itemName, int count)
+    {
+        lock (_lock)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "INSERT OR IGNORE INTO PlayCounts (UserId, ItemType, ItemName, Count) VALUES ($uid, $type, $name, $count)";
+            cmd.Parameters.AddWithValue("$uid", userId);
+            cmd.Parameters.AddWithValue("$type", itemType);
+            cmd.Parameters.AddWithValue("$name", itemName);
+            cmd.Parameters.AddWithValue("$count", count);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+
+    /// <summary>
     /// Marks a suggestion as done.
     /// </summary>
     /// <param name="artist">The artist name.</param>

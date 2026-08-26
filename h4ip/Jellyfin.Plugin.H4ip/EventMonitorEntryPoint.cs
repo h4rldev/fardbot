@@ -8,6 +8,7 @@ using Jellyfin.Plugin.H4ip.Data;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -23,6 +24,7 @@ public class EventMonitorEntryPoint : IHostedService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<EventMonitorEntryPoint> _logger;
     private readonly H4ipRepository _repository;
+    private readonly IUserManager _userManager;
 
     // ponytail: scan-scoped dedupe set. Grows with unique artist count (bounded for a home library);
     // move to a DB-backed "already announced" check if it ever grows unbounded.
@@ -35,12 +37,14 @@ public class EventMonitorEntryPoint : IHostedService
     /// <param name="sessionManager">Session manager.</param>
     /// <param name="httpClientFactory">HTTP client factory.</param>
     /// <param name="repository">Playcount/suggestion repository.</param>
+    /// <param name="userManager">User manager.</param>
     /// <param name="logger">Logger.</param>
     public EventMonitorEntryPoint(
         ILibraryManager libraryManager,
         ISessionManager sessionManager,
         IHttpClientFactory httpClientFactory,
         H4ipRepository repository,
+        IUserManager userManager,
         ILogger<EventMonitorEntryPoint> logger)
     {
         _libraryManager = libraryManager;
@@ -48,6 +52,7 @@ public class EventMonitorEntryPoint : IHostedService
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _repository = repository;
+        _userManager = userManager;
     }
 
     /// <inheritdoc />
@@ -56,6 +61,16 @@ public class EventMonitorEntryPoint : IHostedService
         _libraryManager.ItemAdded += OnItemAdded;
         _libraryManager.ItemUpdated += OnItemUpdated;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
+
+        try
+        {
+            BackfillPlayCounts();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to backfill play counts");
+        }
+
         return Task.CompletedTask;
     }
 
@@ -196,5 +211,53 @@ public class EventMonitorEntryPoint : IHostedService
                 _logger.LogError(ex, "Failed to broadcast event");
             }
         });
+    }
+
+    /// <summary>
+    /// Backfills play counts for all users to populate the SQLite3 database.
+    /// </summary>
+    private void BackfillPlayCounts()
+    {
+        foreach (var user in _userManager.GetUsers())
+        {
+            var items = _libraryManager.GetItems(new InternalItemsQuery(user)
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                Filters = new[] { ItemFilter.IsPlayed },
+                Recursive = true,
+            });
+
+            foreach (var item in items)
+            {
+                if (item is not Audio audio)
+                {
+                    continue;
+                }
+
+                var playCount = item.UserData?.PlayCount ?? 0;
+                if (playCount <= 0)
+                {
+                    continue;
+                }
+
+                var userId = user.Id.ToString();
+                var artist = GetArtistName(audio);
+
+                if (!string.IsNullOrEmpty(artist))
+                {
+                    _repository.SeedPlayCount(userId, "artist", artist, playCount);
+                }
+
+                if (!string.IsNullOrEmpty(audio.Album))
+                {
+                    _repository.SeedPlayCount(userId, "album", audio.Album, playCount);
+                }
+
+                if (!string.IsNullOrEmpty(audio.Name))
+                {
+                    _repository.SeedPlayCount(userId, "track", audio.Name, playCount);
+                }
+            }
+        }
     }
 }
