@@ -10,7 +10,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -222,14 +221,14 @@ public class EventMonitorEntryPoint : IHostedService
     {
         foreach (var user in _userManager.GetUsers())
         {
-            var items = _libraryManager.GetItems(new InternalItemsQuery(user)
+            var result = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
             {
                 IncludeItemTypes = new[] { BaseItemKind.Audio },
-                Filters = new[] { ItemFilter.IsPlayed },
+                IsPlayed = true,
                 Recursive = true,
             });
 
-            foreach (var item in items)
+            foreach (var item in result.Items)
             {
                 if (item is not Audio audio)
                 {
