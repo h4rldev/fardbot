@@ -95,6 +95,8 @@ struct Session {
 struct NowPlaying {
     #[serde(rename = "Name")]
     name: String,
+    #[serde(rename = "Id")]
+    id: String,
     #[serde(rename = "AlbumArtist")]
     album_artist: Option<String>,
     #[serde(rename = "Album")]
@@ -115,6 +117,8 @@ struct SearchHint {
     name: String,
     #[serde(rename = "Type")]
     item_type: String,
+    #[serde(rename = "ItemId")]
+    item_id: String,
     #[serde(rename = "AlbumArtist")]
     album_artist: Option<String>,
     #[serde(rename = "Album")]
@@ -150,13 +154,66 @@ fn hint_to_kind(item_type: &str) -> Option<ItemKind> {
     }
 }
 
+fn search_type(kind: &ItemKind) -> &'static str {
+    match kind {
+        ItemKind::Artist => "MusicArtist",
+        ItemKind::Album => "MusicAlbum",
+        ItemKind::Track => "Audio",
+    }
+}
+
+fn thumbnail_url(item_id: &str) -> String {
+    format!(
+        "{}/Items/{}/Images/Primary?maxWidth=200&ApiKey={}",
+        JELLYFIN_URL.as_str(),
+        item_id,
+        JELLYFIN_API_KEY.as_str()
+    )
+}
+
+async fn thumbnail_if_available(item_id: &str) -> Option<String> {
+    let url = thumbnail_url(item_id);
+    reqwest::Client::new()
+        .head(&url)
+        .send()
+        .await
+        .map(|r| r.status().is_success().then_some(url))
+        .ok()
+        .flatten()
+}
+
+async fn resolve_item_id(kind: &ItemKind, name: &str) -> Option<String> {
+    let search: SearchHints = jf_get("/Search/Hints", &[("searchTerm", name), ("limit", "5")])
+        .await
+        .ok()?;
+    search
+        .hints
+        .iter()
+        .find(|h| h.item_type == search_type(kind))
+        .or_else(|| search.hints.iter().find(|h| hint_to_kind(&h.item_type).is_some()))
+        .map(|h| h.item_id.clone())
+}
+
 async fn reply_embed(
     ctx: &Context<'_>,
     title: &str,
     description: String,
     ephemeral: bool,
 ) -> Result<(), Error> {
-    let embed = CreateEmbed::new().title(title).description(description);
+    reply_embed_thumb(ctx, title, description, ephemeral, None).await
+}
+
+async fn reply_embed_thumb(
+    ctx: &Context<'_>,
+    title: &str,
+    description: String,
+    ephemeral: bool,
+    thumbnail: Option<String>,
+) -> Result<(), Error> {
+    let mut embed = CreateEmbed::new().title(title).description(description);
+    if let Some(url) = thumbnail {
+        embed = embed.thumbnail(url);
+    }
     ctx.send(CreateReply::default().embed(embed).ephemeral(ephemeral))
         .await?;
     Ok(())
@@ -239,22 +296,30 @@ pub async fn crown(
         description.push_str("\n\nNobody has played this yet.");
     } else {
         description.push_str(
-            &entries
-                .iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    if i == 0 {
-                        format!("{}. **{}** — {} plays 👑", i + 1, e.user, e.count)
-                    } else {
-                        format!("{}. **{}** — {} plays", i + 1, e.user, e.count)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
+            &format!(
+                "\n\n{}",
+                entries
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| {
+                        if i == 0 {
+                            format!("{}. **{}** — {} plays 👑", i + 1, e.user, e.count)
+                        } else {
+                            format!("{}. **{}** — {} plays", i + 1, e.user, e.count)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
         );
     }
 
-    reply_embed(&ctx, "Crown", description, false).await
+    let thumb = if hint.item_id.is_empty() {
+        None
+    } else {
+        thumbnail_if_available(&hint.item_id).await
+    };
+    reply_embed_thumb(&ctx, &format!("Crown · {}", hint.name), description, false, thumb).await
 }
 
 #[poise::command(slash_command, category = "Jellyfin")]
@@ -309,7 +374,12 @@ pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
             session.user_name, np.name, artist, album
         )
     };
-    reply_embed(&ctx, "Now Playing", line, false).await
+    let thumb = if np.id.is_empty() {
+        None
+    } else {
+        thumbnail_if_available(&np.id).await
+    };
+    reply_embed_thumb(&ctx, "Now Playing", line, false, thumb).await
 }
 
 #[derive(poise::Modal)]
@@ -433,11 +503,15 @@ pub async fn top(
             .enumerate()
             .map(|(i, e)| format!("{}. **{}** — {} plays", i + 1, e.item_name, e.count))
             .collect();
-        reply_embed(
+        let thumb = resolve_item_id(&kind, &entries[0].item_name)
+            .await
+            .and_then(|id| thumbnail_if_available(&id).await);
+        reply_embed_thumb(
             &ctx,
             &format!("Your top {}s", kind.as_str()),
             lines.join("\n"),
             false,
+            thumb,
         )
         .await
     }

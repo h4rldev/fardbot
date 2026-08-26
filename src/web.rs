@@ -77,7 +77,9 @@ async fn jellyfin_event(
             "{}/Items/{}/Images/Primary?maxWidth=200&ApiKey={}",
             state.jellyfin_url, item_id, state.api_key
         );
-        embed = embed.thumbnail(url);
+        if image_available(&url).await {
+            embed = embed.thumbnail(url);
+        }
     }
 
     match channel
@@ -97,6 +99,15 @@ async fn jellyfin_event(
                 .into_response()
         }
     }
+}
+
+async fn image_available(url: &str) -> bool {
+    reqwest::Client::new()
+        .head(url)
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
 }
 
 pub async fn serve(

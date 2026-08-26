@@ -64,7 +64,6 @@ public class EventMonitorEntryPoint : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _libraryManager.ItemAdded += OnItemAdded;
-        _libraryManager.ItemUpdated += OnItemUpdated;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
 
         try
@@ -83,7 +82,6 @@ public class EventMonitorEntryPoint : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _libraryManager.ItemAdded -= OnItemAdded;
-        _libraryManager.ItemUpdated -= OnItemUpdated;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
         return Task.CompletedTask;
     }
@@ -103,19 +101,6 @@ public class EventMonitorEntryPoint : IHostedService
             return;
         }
 
-        if (e.Item is Audio audio)
-        {
-            AnnounceTrack(audio);
-        }
-    }
-
-    /// <summary>
-    /// Announces a track on ItemUpdated.
-    /// </summary>
-    /// <param name="sender">The sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void OnItemUpdated(object? sender, ItemChangeEventArgs e)
-    {
         if (e.Item is Audio audio)
         {
             AnnounceTrack(audio);
