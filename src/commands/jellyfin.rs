@@ -86,7 +86,7 @@ struct JFUser {
 #[derive(Deserialize)]
 struct Session {
     #[serde(rename = "UserName")]
-    user_name: String,
+    _user_name: String,
     #[serde(rename = "NowPlayingItem")]
     now_playing: Option<NowPlaying>,
 }
@@ -376,23 +376,17 @@ pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
     let np = session.now_playing.as_ref().unwrap();
     let artist = np.album_artist.as_deref().unwrap_or("unknown");
     let album = np.album.as_deref().unwrap_or("");
-    let line = if album.is_empty() {
-        format!(
-            "🎧 **{}** is playing **{}** by {}",
-            session.user_name, np.name, artist
-        )
+    let description = if album.is_empty() {
+        format!("**{artist}**")
     } else {
-        format!(
-            "🎧 **{}** is playing **{}** by {} ({})",
-            session.user_name, np.name, artist, album
-        )
+        format!("**{artist}**\n{album}")
     };
     let thumb = if np.id.is_empty() {
         None
     } else {
         thumbnail_if_available(&np.id).await
     };
-    reply_embed_thumb(&ctx, "Now Playing", line, false, thumb).await
+    reply_embed_thumb(&ctx, &np.name, description, false, thumb).await
 }
 
 #[derive(poise::Modal)]
