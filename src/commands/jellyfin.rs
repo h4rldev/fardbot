@@ -130,9 +130,15 @@ fn hint_to_kind(item_type: &str) -> Option<ItemKind> {
     }
 }
 
-async fn reply_embed(ctx: &Context<'_>, title: &str, description: String) -> Result<(), Error> {
+async fn reply_embed(
+    ctx: &Context<'_>,
+    title: &str,
+    description: String,
+    ephemeral: bool,
+) -> Result<(), Error> {
     let embed = CreateEmbed::new().title(title).description(description);
-    ctx.send(CreateReply::default().embed(embed)).await?;
+    ctx.send(CreateReply::default().embed(embed).ephemeral(ephemeral))
+        .await?;
     Ok(())
 }
 
@@ -176,6 +182,7 @@ pub async fn crown(
             &ctx,
             "Crown",
             format!("Couldn't find anything matching **{name}**."),
+            true,
         )
         .await;
     };
@@ -184,6 +191,7 @@ pub async fn crown(
             &ctx,
             "Crown",
             format!("**{}** isn't an artist, album, or track.", hint.name),
+            true,
         )
         .await;
     };
@@ -226,7 +234,7 @@ pub async fn crown(
         );
     }
 
-    reply_embed(&ctx, "Crown", description).await
+    reply_embed(&ctx, "Crown", description, false).await
 }
 
 #[poise::command(slash_command, category = "Jellyfin")]
@@ -243,6 +251,7 @@ pub async fn suggest(
         &ctx,
         "Suggestion added!",
         format!("**{artist}** was added to the queue."),
+        false,
     )
     .await
 }
@@ -257,7 +266,13 @@ pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
             .as_ref()
             .is_some_and(|np| np.item_type == "Audio")
     }) else {
-        return reply_embed(&ctx, "Now Playing", "Nothing is playing right now.".into()).await;
+        return reply_embed(
+            &ctx,
+            "Now Playing",
+            "Nothing is playing right now.".into(),
+            false,
+        )
+        .await;
     };
 
     let np = session.now_playing.as_ref().unwrap();
@@ -274,7 +289,7 @@ pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
             session.user_name, np.name, artist, album
         )
     };
-    reply_embed(&ctx, "Now Playing", line).await
+    reply_embed(&ctx, "Now Playing", line, false).await
 }
 
 #[derive(poise::Modal)]
@@ -295,7 +310,8 @@ pub async fn setup(ctx: Context<'_>) -> Result<(), Error> {
             .components(vec![CreateActionRow::Buttons(vec![
                 CreateButton::new_link(profile_url).label("Open Jellyfin profile"),
                 CreateButton::new("open_setup_modal").label("Enter user ID"),
-            ])]),
+            ])])
+            .ephemeral(true),
     )
     .await?;
 
@@ -342,7 +358,7 @@ pub async fn setup(ctx: Context<'_>) -> Result<(), Error> {
                         "Linked to Jellyfin user ID **{}**.\n[Open your Jellyfin profile]({profile_url})",
                         modal.user_id
                     )),
-            ),
+            ).ephemeral(true),
         )
         .await?;
         break;
@@ -367,6 +383,7 @@ pub async fn top(
             &ctx,
             "Not linked",
             "Run `/setup` first to link your Jellyfin account.".into(),
+            true,
         )
         .await;
     };
@@ -387,6 +404,7 @@ pub async fn top(
             &ctx,
             &format!("Your top {}s", kind.as_str()),
             "No plays recorded yet.".into(),
+            false,
         )
         .await
     } else {
@@ -399,6 +417,7 @@ pub async fn top(
             &ctx,
             &format!("Your top {}s", kind.as_str()),
             lines.join("\n"),
+            false,
         )
         .await
     }
@@ -426,6 +445,7 @@ pub async fn setchannel(
         &ctx,
         "Broadcast channel set",
         format!("Jellyfin broadcasts will go to <#{id}>."),
+        true,
     )
     .await
 }
