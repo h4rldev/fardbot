@@ -128,7 +128,6 @@ public sealed class H4ipRepository : IDisposable
         }
     }
 
-
     /// <summary>
     /// Marks a suggestion as done.
     /// </summary>
