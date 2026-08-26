@@ -9,6 +9,7 @@ use poise::{
 use reqwest::Client;
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{sync::LazyLock, time::Duration};
+use tracing::info;
 
 static JELLYFIN_URL: LazyLock<String> =
     LazyLock::new(|| std::env::var("JELLYFIN_URL").expect("missing JELLYFIN_URL"));
@@ -16,7 +17,7 @@ static JELLYFIN_API_KEY: LazyLock<String> =
     LazyLock::new(|| std::env::var("JELLYFIN_API_KEY").expect("missing JELLYFIN_API_KEY"));
 
 async fn jf_get<T: DeserializeOwned>(path: &str, params: &[(&str, &str)]) -> Result<T, Error> {
-    Ok(Client::new()
+    let response = Client::new()
         .get(format!("{}/{}", JELLYFIN_URL.as_str(), path))
         .query(params)
         .header(
@@ -24,13 +25,21 @@ async fn jf_get<T: DeserializeOwned>(path: &str, params: &[(&str, &str)]) -> Res
             format!("MediaBrowser Token=\"{}\"", JELLYFIN_API_KEY.as_str()),
         )
         .send()
-        .await?
-        .json::<T>()
-        .await?)
+        .await?;
+    info!(
+        "jellyfin GET {path}?{} -> {}",
+        params
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join("&"),
+        response.status()
+    );
+    Ok(response.json::<T>().await?)
 }
 
 async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
-    Client::new()
+    let response = Client::new()
         .post(format!("{}/{}", JELLYFIN_URL.as_str(), path))
         .header(
             "Authorization",
@@ -39,6 +48,7 @@ async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
         .json(body)
         .send()
         .await?;
+    info!("jellyfin POST {path} -> {}", response.status());
 
     Ok(())
 }

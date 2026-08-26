@@ -9,7 +9,7 @@ use poise::serenity_prelude::{ChannelId, CreateEmbed, CreateMessage, Http};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::error;
+use tracing::{error, info, warn};
 
 struct WebState {
     http: Http,
@@ -36,6 +36,7 @@ async fn jellyfin_event(
 ) -> Response {
     let secret = headers.get("x-h4ip-secret").and_then(|s| s.to_str().ok());
     if secret != Some(&state.secret) {
+        warn!("jellyfin event rejected: bad secret");
         return (StatusCode::UNAUTHORIZED, "Invalid secret").into_response();
     }
 
@@ -47,6 +48,11 @@ async fn jellyfin_event(
         Ok(body) => body,
         Err(_) => return (StatusCode::BAD_REQUEST, "Malformed body").into_response(),
     };
+
+    info!(
+        "received jellyfin event: kind={}, artist={:?}, track={:?}, album={:?}, item_id={:?}",
+        event.kind, event.artist, event.track, event.album, event.item_id
+    );
 
     let (title, description) = match event.kind.as_str() {
         "artist_added" => ("New artist", event.artist.unwrap_or_default()),
@@ -78,7 +84,10 @@ async fn jellyfin_event(
         .send_message(&state.http, CreateMessage::new().embed(embed))
         .await
     {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            info!("broadcast sent to channel {channel}");
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => {
             error!("Failed to broadcast event: {:?}", e);
             (

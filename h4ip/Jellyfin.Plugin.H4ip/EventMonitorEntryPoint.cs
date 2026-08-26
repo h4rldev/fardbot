@@ -78,6 +78,7 @@ public class EventMonitorEntryPoint : IHostedService
         if (e.Item is MusicArtist artist)
         {
             _announcedArtists.Add(artist.Name);
+            _logger.LogInformation("New artist added: {Artist}", artist.Name);
             PostEvent(new { kind = "artist_added", artist = artist.Name, itemId = artist.Id.ToString("N") });
             return;
         }
@@ -145,6 +146,7 @@ public class EventMonitorEntryPoint : IHostedService
             return;
         }
 
+        _logger.LogInformation("New track added: {Track} by {Artist}", audio.Name, artist);
         PostEvent(new { kind = "track_added", artist, track = audio.Name, album = audio.Album, itemId = audio.Id.ToString("N") });
     }
 
@@ -178,8 +180,13 @@ public class EventMonitorEntryPoint : IHostedService
                 using var request = new HttpRequestMessage(HttpMethod.Post, $"{config.BotUrl}/jellyfin/event");
                 request.Headers.Add("X-H4ip-Secret", config.SharedSecret);
                 request.Content = JsonContent.Create(payload);
+                _logger.LogInformation("Broadcasting event to {Url}", config.BotUrl);
                 using var response = await client.SendAsync(request).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Broadcast succeeded ({Status})", response.StatusCode);
+                }
+                else
                 {
                     _logger.LogWarning("Broadcast returned {Status}", response.StatusCode);
                 }
