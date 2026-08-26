@@ -135,7 +135,7 @@ impl ItemKind {
 
 fn hint_to_kind(item_type: &str) -> Option<ItemKind> {
     match item_type {
-        "Artist" => Some(ItemKind::Artist),
+        "MusicArtist" => Some(ItemKind::Artist),
         "MusicAlbum" => Some(ItemKind::Album),
         "Audio" => Some(ItemKind::Track),
         _ => None,
@@ -168,7 +168,7 @@ pub async fn crown(
     )
     .await?;
 
-    let hint = ["Artist", "MusicAlbum", "Audio"]
+    let hint = ["MusicArtist", "MusicAlbum", "Audio"]
         .iter()
         .find_map(|t| {
             search
@@ -263,7 +263,7 @@ pub async fn suggest(
         &ctx,
         "Suggestion added!",
         format!("**{artist}** was added to the queue."),
-        false,
+        true,
     )
     .await
 }
