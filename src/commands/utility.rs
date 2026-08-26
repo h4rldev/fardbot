@@ -35,6 +35,7 @@ struct WeekData {
     week: i32,
 }
 
+/// Replies with the gateway latency.
 #[command(slash_command, category = "Latency")]
 pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     ctx.reply(format!(
@@ -45,6 +46,7 @@ pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Shows Discord's service status.
 #[command(slash_command, category = "Latency")]
 pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     let client = Client::new();
@@ -69,6 +71,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Shows the current ISO week number.
 #[command(slash_command, category = "Utility")]
 pub async fn get_week(ctx: Context<'_>) -> Result<(), Error> {
     let client = Client::new();

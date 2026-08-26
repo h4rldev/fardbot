@@ -190,7 +190,12 @@ async fn resolve_item_id(kind: &ItemKind, name: &str) -> Option<String> {
         .hints
         .iter()
         .find(|h| h.item_type == search_type(kind))
-        .or_else(|| search.hints.iter().find(|h| hint_to_kind(&h.item_type).is_some()))
+        .or_else(|| {
+            search
+                .hints
+                .iter()
+                .find(|h| hint_to_kind(&h.item_type).is_some())
+        })
         .map(|h| h.item_id.clone())
 }
 
@@ -219,6 +224,7 @@ async fn reply_embed_thumb(
     Ok(())
 }
 
+/// Shows the ranked listeners for an item, crown on top.
 #[poise::command(slash_command, category = "Jellyfin")]
 pub async fn crown(
     ctx: Context<'_>,
@@ -295,23 +301,21 @@ pub async fn crown(
     if entries.is_empty() {
         description.push_str("\n\nNobody has played this yet.");
     } else {
-        description.push_str(
-            &format!(
-                "\n\n{}",
-                entries
-                    .iter()
-                    .enumerate()
-                    .map(|(i, e)| {
-                        if i == 0 {
-                            format!("{}. **{}** — {} plays 👑", i + 1, e.user, e.count)
-                        } else {
-                            format!("{}. **{}** — {} plays", i + 1, e.user, e.count)
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
-        );
+        description.push_str(&format!(
+            "\n\n{}",
+            entries
+                .iter()
+                .enumerate()
+                .map(|(i, e)| {
+                    if i == 0 {
+                        format!("{}. **{}** — {} plays 👑", i + 1, e.user, e.count)
+                    } else {
+                        format!("{}. **{}** — {} plays", i + 1, e.user, e.count)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
     }
 
     let thumb = if hint.item_id.is_empty() {
@@ -319,9 +323,17 @@ pub async fn crown(
     } else {
         thumbnail_if_available(&hint.item_id).await
     };
-    reply_embed_thumb(&ctx, &format!("Crown · {}", hint.name), description, false, thumb).await
+    reply_embed_thumb(
+        &ctx,
+        &format!("Crown · {}", hint.name),
+        description,
+        false,
+        thumb,
+    )
+    .await
 }
 
+/// Adds an artist to the suggestion queue.
 #[poise::command(slash_command, category = "Jellyfin")]
 pub async fn suggest(
     ctx: Context<'_>,
@@ -341,6 +353,7 @@ pub async fn suggest(
     .await
 }
 
+/// Shows what's currently playing on the Jellyfin server.
 #[poise::command(slash_command, category = "Jellyfin")]
 pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
@@ -390,6 +403,7 @@ struct SetupModal {
     user_id: String,
 }
 
+/// Links your Discord account to your Jellyfin user ID.
 #[poise::command(slash_command, category = "Jellyfin")]
 pub async fn setup(ctx: Context<'_>) -> Result<(), Error> {
     let profile_url = &format!("{}/web/#/mypreferencesmenu", JELLYFIN_URL.as_str());
@@ -456,6 +470,7 @@ pub async fn setup(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Shows your top artists, albums, or tracks.
 #[poise::command(slash_command, category = "Jellyfin")]
 pub async fn top(
     ctx: Context<'_>,
@@ -518,6 +533,7 @@ pub async fn top(
     }
 }
 
+/// Sets the channel that Jellyfin broadcasts go to.
 #[poise::command(
     slash_command,
     category = "Jellyfin",

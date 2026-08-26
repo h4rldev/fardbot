@@ -37,6 +37,7 @@ pub fn save_channel(channel_id: u64) {
     let _ = std::fs::write("jellyfin_channel_id.txt", channel_id.to_string());
 }
 
+/// Shows help for a command, or lists all commands.
 #[poise::command(slash_command, track_edits)]
 async fn help(
     ctx: Context<'_>,

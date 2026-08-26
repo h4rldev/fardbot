@@ -22,7 +22,7 @@ enum Balls {
     All,
 }
 
-// Replies with hi!
+/// Replies with hi!
 #[command(slash_command, category = "Fun")]
 pub async fn hello(ctx: Context<'_>) -> Result<(), Error> {
     ctx.reply("Hi!").await?;
@@ -55,7 +55,7 @@ async fn get_channel_permissions(ctx: &Context<'_>) -> Result<Permissions, Error
     Ok(perms)
 }
 
-// Balls people!!!
+/// Balls people!!!
 #[command(
     slash_command,
     category = "Fun",
