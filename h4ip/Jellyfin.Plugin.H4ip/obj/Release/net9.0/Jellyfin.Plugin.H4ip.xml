@@ -1,0 +1,277 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Jellyfin.Plugin.H4ip</name>
+    </assembly>
+    <members>
+        <member name="T:Jellyfin.Plugin.H4ip.Api.AddSuggestionRequest">
+            <summary>
+            Request body for adding a suggestion.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.H4ip.Api.AddSuggestionRequest.Artist">
+            <summary>
+            Gets or sets the artist name.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.H4ip.Api.H4ipController">
+            <summary>
+            API endpoints for the h4ip integration.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.#ctor(Jellyfin.Plugin.H4ip.Data.H4ipRepository,MediaBrowser.Controller.Library.IUserManager)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.H4ip.Api.H4ipController"/> class.
+            </summary>
+            <param name="repository">Playcount/suggestion repository.</param>
+            <param name="userManager">User manager.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.GetSuggestions(System.Boolean)">
+            <summary>
+            Get artist suggestions.
+            </summary>
+            <param name="all">Whether to return all suggestions.</param>
+            <returns>A list of suggestions.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.AddSuggestion(Jellyfin.Plugin.H4ip.Api.AddSuggestionRequest)">
+            <summary>
+            Adds a suggestion.
+            </summary>
+            <param name="request">The request body.</param>
+            <returns>A successful response.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.MarkSuggestionDone(System.String)">
+            <summary>
+            Marks a suggestion as done.
+            </summary>
+            <param name="artist">The artist name.</param>
+            <returns>A successful response.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.SkipSuggestion(System.String)">
+            <summary>
+            Marks a suggestion as skipped.
+            </summary>
+            <param name="artist">The artist name.</param>
+            <returns>A successful response.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.GetCrown(System.String,System.String,System.Int32)">
+            <summary>
+            Gets the users with the most plays for an item.
+            </summary>
+            <param name="kind">The item type.</param>
+            <param name="name">The item name.</param>
+            <param name="limit">The number of listeners to return.</param>
+            <returns>A list of top listeners.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.GetTop(System.String,System.String,System.Int32)">
+            <summary>
+            Gets the top listeners for an item.
+            </summary>
+            <param name="user">The user ID.</param>
+            <param name="kind">The item type.</param>
+            <param name="limit">The number of listeners to return.</param>
+            <returns>A list of top listeners.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Api.H4ipController.IsValidKind(System.String)">
+            <summary>
+            Checks if a kind is valid.
+            </summary>
+            <param name="kind">The kind to check.</param>
+            <returns>True if the kind is valid, false otherwise.</returns>
+        </member>
+        <member name="T:Jellyfin.Plugin.H4ip.Configuration.PluginConfiguration">
+            <summary>
+            Plugin configuration.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Configuration.PluginConfiguration.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.H4ip.Configuration.PluginConfiguration"/> class.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.H4ip.Configuration.PluginConfiguration.BotUrl">
+            <summary>
+            Gets or sets the base URL of the h4bot Discord bot's HTTP endpoint.
+            </summary>
+        </member>
+        <member name="P:Jellyfin.Plugin.H4ip.Configuration.PluginConfiguration.SharedSecret">
+            <summary>
+            Gets or sets the shared secret the bot expects in the X-H4ip-Secret header.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.H4ip.Data.H4ipRepository">
+            <summary>
+            SQLite persistence for suggestions and play counts.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.#ctor(MediaBrowser.Common.Configuration.IApplicationPaths,Microsoft.Extensions.Logging.ILogger{Jellyfin.Plugin.H4ip.Data.H4ipRepository})">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.H4ip.Data.H4ipRepository"/> class.
+            </summary>
+            <param name="applicationPaths">Application paths.</param>
+            <param name="logger">Logger.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.Initialize">
+            <summary>
+            Initializes the database.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.AddSuggestion(System.String)">
+            <summary>
+            Adds a suggestion.
+            </summary>
+            <param name="artist">The artist name.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.SeedPlayCount(System.String,System.String,System.String,System.Int32)">
+            <summary>
+            Seeds a play count onl if the row doesn't exist yet, aka "idempotent".
+            </summary>
+            <param name="userId">The user ID.</param>
+            <param name="itemType">The item type.</param>
+            <param name="itemName">The item name.</param>
+            <param name="count">The count.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.MarkSuggestionDone(System.String)">
+            <summary>
+            Marks a suggestion as done.
+            </summary>
+            <param name="artist">The artist name.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.SkipSuggestion(System.String)">
+            <summary>
+            Marks a suggestion as skipped.
+            </summary>
+            <param name="artist">The artist name.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.GetSuggestions(System.Boolean)">
+            <summary>
+            Lists suggestions, optionally only pending ones.
+            </summary>
+            <param name="pendingOnly">Whether to only return pending suggestions.</param>
+            <returns>A list of suggestions.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.IncrementPlayCount(System.String,System.String,System.String)">
+            <summary>
+            Increments the play count of an item for a user.
+            </summary>
+            <param name="userId">The user ID.</param>
+            <param name="itemType">The item type.</param>
+            <param name="itemName">The item name.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.GetTopItems(System.String,System.String,System.Int32)">
+            <summary>
+            Gets a user's top items.
+            </summary>
+            <param name="userId">The user ID.</param>
+            <param name="itemType">The item type.</param>
+            <param name="limit">The number of items to return.</param>
+            <returns>A list of top items.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.GetTopListeners(System.String,System.String,System.Int32)">
+            <summary>
+            Gets a user's top listeners for an item.
+            </summary>
+            <param name="itemType">The item type.</param>
+            <param name="itemName">The item name.</param>
+            <param name="limit">The number of listeners to return.</param>
+            <returns>A list of top listeners.</returns>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Data.H4ipRepository.Dispose">
+            <inheritdoc />
+        </member>
+        <member name="T:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint">
+            <summary>
+            Listens for library and playback events and pushes them to the h4bot endpoint.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.#ctor(MediaBrowser.Controller.Library.ILibraryManager,MediaBrowser.Controller.Session.ISessionManager,System.Net.Http.IHttpClientFactory,Jellyfin.Plugin.H4ip.Data.H4ipRepository,MediaBrowser.Controller.Library.IUserManager,MediaBrowser.Controller.Library.IUserDataManager,Microsoft.Extensions.Logging.ILogger{Jellyfin.Plugin.H4ip.EventMonitorEntryPoint})">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint"/> class.
+            </summary>
+            <param name="libraryManager">Library manager.</param>
+            <param name="sessionManager">Session manager.</param>
+            <param name="httpClientFactory">HTTP client factory.</param>
+            <param name="repository">Playcount/suggestion repository.</param>
+            <param name="userManager">User manager.</param>
+            <param name="userDataManager">User data manager.</param>
+            <param name="logger">Logger.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.StartAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.StopAsync(System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.OnItemAdded(System.Object,MediaBrowser.Controller.Library.ItemChangeEventArgs)">
+            <summary>
+            Adds an artist, or Announces a track on ItemAdded.
+            </summary>
+            <param name="sender">The sender.</param>
+            <param name="e">The event arguments.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.OnPlaybackStopped(System.Object,MediaBrowser.Controller.Library.PlaybackStopEventArgs)">
+            <summary>
+            Increments the play count on PlaybackStopped.
+            </summary>
+            <param name="sender">The sender.</param>
+            <param name="e">The event arguments.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.AnnounceTrack(MediaBrowser.Controller.Entities.Audio.Audio)">
+            <summary>
+            Announces a track.
+            </summary>
+            <param name="audio">The audio item.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.GetArtistName(MediaBrowser.Controller.Entities.Audio.Audio)">
+            <summary>
+            Gets the artist name from an audio item.
+            </summary>
+            <param name="audio">The audio item.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.PostEvent(System.Object)">
+            <summary>
+            Triggers an event broadcast.
+            </summary>
+            <param name="payload">The payload.</param>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.EventMonitorEntryPoint.BackfillPlayCounts">
+            <summary>
+            Backfills play counts for all users to populate the SQLite3 database.
+            </summary>
+        </member>
+        <member name="T:Jellyfin.Plugin.H4ip.Plugin">
+            <summary>
+            The main plugin.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Plugin.#ctor(MediaBrowser.Common.Configuration.IApplicationPaths,MediaBrowser.Model.Serialization.IXmlSerializer)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Jellyfin.Plugin.H4ip.Plugin"/> class.
+            </summary>
+            <param name="applicationPaths">Instance of the <see cref="T:MediaBrowser.Common.Configuration.IApplicationPaths"/> interface.</param>
+            <param name="xmlSerializer">Instance of the <see cref="T:MediaBrowser.Model.Serialization.IXmlSerializer"/> interface.</param>
+        </member>
+        <member name="P:Jellyfin.Plugin.H4ip.Plugin.Name">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.H4ip.Plugin.Id">
+            <inheritdoc />
+        </member>
+        <member name="P:Jellyfin.Plugin.H4ip.Plugin.Instance">
+            <summary>
+            Gets the current plugin instance.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.Plugin.GetPages">
+            <inheritdoc />
+        </member>
+        <member name="T:Jellyfin.Plugin.H4ip.PluginServiceRegistrator">
+            <summary>
+            Service registrator for the plugin.
+            </summary>
+        </member>
+        <member name="M:Jellyfin.Plugin.H4ip.PluginServiceRegistrator.RegisterServices(Microsoft.Extensions.DependencyInjection.IServiceCollection,MediaBrowser.Controller.IServerApplicationHost)">
+            <inheritdoc />
+        </member>
+    </members>
+</doc>
