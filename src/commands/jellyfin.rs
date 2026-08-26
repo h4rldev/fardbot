@@ -503,9 +503,10 @@ pub async fn top(
             .enumerate()
             .map(|(i, e)| format!("{}. **{}** — {} plays", i + 1, e.item_name, e.count))
             .collect();
-        let thumb = resolve_item_id(&kind, &entries[0].item_name)
-            .await
-            .and_then(|id| thumbnail_if_available(&id).await);
+        let thumb = match resolve_item_id(&kind, &entries[0].item_name).await {
+            Some(id) => thumbnail_if_available(&id).await,
+            None => None,
+        };
         reply_embed_thumb(
             &ctx,
             &format!("Your top {}s", kind.as_str()),
