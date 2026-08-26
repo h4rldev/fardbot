@@ -26,6 +26,7 @@ public class EventMonitorEntryPoint : IHostedService
     private readonly ILogger<EventMonitorEntryPoint> _logger;
     private readonly H4ipRepository _repository;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
 
     // ponytail: scan-scoped dedupe set. Grows with unique artist count (bounded for a home library);
     // move to a DB-backed "already announced" check if it ever grows unbounded.
@@ -39,6 +40,7 @@ public class EventMonitorEntryPoint : IHostedService
     /// <param name="httpClientFactory">HTTP client factory.</param>
     /// <param name="repository">Playcount/suggestion repository.</param>
     /// <param name="userManager">User manager.</param>
+    /// <param name="userDataManager">User data manager.</param>
     /// <param name="logger">Logger.</param>
     public EventMonitorEntryPoint(
         ILibraryManager libraryManager,
@@ -46,6 +48,7 @@ public class EventMonitorEntryPoint : IHostedService
         IHttpClientFactory httpClientFactory,
         H4ipRepository repository,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILogger<EventMonitorEntryPoint> logger)
     {
         _libraryManager = libraryManager;
@@ -54,6 +57,7 @@ public class EventMonitorEntryPoint : IHostedService
         _logger = logger;
         _repository = repository;
         _userManager = userManager;
+        _userDataManager = userDataManager;
     }
 
     /// <inheritdoc />
@@ -235,7 +239,7 @@ public class EventMonitorEntryPoint : IHostedService
                     continue;
                 }
 
-                var playCount = item.UserData?.PlayCount ?? 0;
+                var playCount = _userDataManager.GetUserData(user, item)?.PlayCount ?? 0;
                 if (playCount <= 0)
                 {
                     continue;
