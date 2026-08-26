@@ -377,9 +377,9 @@ pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
     let artist = np.album_artist.as_deref().unwrap_or("unknown");
     let album = np.album.as_deref().unwrap_or("");
     let description = if album.is_empty() {
-        format!("**{artist}**")
+        format!("by **{artist}**")
     } else {
-        format!("**{artist}**\n{album}")
+        format!("on **{album}**\nby **{artist}**")
     };
     let thumb = if np.id.is_empty() {
         None
