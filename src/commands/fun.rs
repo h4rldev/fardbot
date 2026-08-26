@@ -103,16 +103,9 @@ pub async fn balls(
             }
         },
         None => {
-            if specific.is_some() {
-                ctx.reply(format!(
-                    "Ballsing: {}",
-                    specific
-                        .as_ref()
-                        .expect("Failed to get member")
-                        .mention()
-                        .to_string()
-                ))
-                .await?;
+            if let Some(specific) = &specific {
+                ctx.reply(format!("Ballsing: {}", specific.mention()))
+                    .await?;
             } else {
                 ctx.reply("Ballsing a random person").await?;
             }
@@ -127,13 +120,13 @@ pub async fn balls(
             Balls::Single => pick_random(1, users).await?,
             Balls::Multiple => {
                 let amount = thread_rng().gen_range(3..length);
-                pick_random(amount.try_into()?, users).await?
+                pick_random(amount, users).await?
             }
             Balls::All => users,
         },
         None => {
-            if specific.is_some() {
-                vec![specific.unwrap().user]
+            if let Some(specific) = specific {
+                vec![specific.user]
             } else {
                 pick_random(1, users).await?
             }
@@ -156,7 +149,7 @@ pub async fn balls(
 
     let mention_users: String = who_to_balls
         .iter()
-        .map(|user| format!("- {}", user.mention().to_string()))
+        .map(|user| format!("- {}", user.mention()))
         .collect::<Vec<String>>()
         .join("\n");
     let reply = format!("Successfully ballsed:\n {}", mention_users);

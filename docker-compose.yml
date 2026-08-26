@@ -1,0 +1,11 @@
+services:
+  h4bot:
+    build: .
+    image: ghcr.io/h4rldev/fardbot:latest
+    container_name: h4bot
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data

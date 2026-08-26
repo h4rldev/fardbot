@@ -6,8 +6,8 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.75"
 poise = { version = "0.6.1", features = ["cache"] }
-tokio = { version = "1.32.0", features = ["rt-multi-thread"] }
-reqwest = { version = "0.13.4", features = ["json"] }
+tokio = { version = "1.32.0", features = ["io-util", "net", "rt-multi-thread", "signal"] }
+reqwest = { version = "0.13.4", features = ["json", "query"] }
 tracing = "0.1.37"
 futures = "0.3.28"
 regex = "1.9.3"
@@ -16,3 +16,5 @@ rand = { version = "0.8.5" }
 serde = { version = "1.0.195", features = ["derive"] }
 dotenvy = "0.15.7"
 tracing-subscriber = "0.3.18"
+axum = "0.8.9"
+serde_json = "1.0.151"

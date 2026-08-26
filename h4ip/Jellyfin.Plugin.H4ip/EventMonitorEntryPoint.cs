@@ -78,7 +78,7 @@ public class EventMonitorEntryPoint : IHostedService
         if (e.Item is MusicArtist artist)
         {
             _announcedArtists.Add(artist.Name);
-            PostEvent(new { kind = "artist_added", artist = artist.Name });
+            PostEvent(new { kind = "artist_added", artist = artist.Name, itemId = artist.Id.ToString("N") });
             return;
         }
 
@@ -145,7 +145,7 @@ public class EventMonitorEntryPoint : IHostedService
             return;
         }
 
-        PostEvent(new { kind = "track_added", artist, track = audio.Name });
+        PostEvent(new { kind = "track_added", artist, track = audio.Name, album = audio.Album, itemId = audio.Id.ToString("N") });
     }
 
     /// <summary>

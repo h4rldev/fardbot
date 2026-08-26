@@ -1,0 +1,12 @@
+target
+h4ip
+.git
+.gitignore
+.env
+.envrc
+AGENTS.md
+README.md
+justfile
+shell.nix
+Cargo.lock.orig
+data

@@ -3,13 +3,11 @@ with pkgs;
   mkShell {
     allowUnfree = true;
     name = "h4bot";
-    packages = [
-      rustup
-    ];
     buildInputs = [
       pkg-config
       openssl
       dotnet-sdk_9
+      just
     ];
     RUST_BACKTRACE = 1;
   }
