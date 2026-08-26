@@ -23,6 +23,7 @@ jobs:
         with:
           path: h4ip
           output: ./artifacts
+          version: '1.0.0.${{ github.run_number }}'
 
       - name: Generate manifest
         env:

@@ -45,7 +45,8 @@ public sealed class H4ipRepository : IDisposable
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Artist TEXT NOT NULL,
                 AddedAt TEXT NOT NULL,
-                Done INTEGER NOT NULL DEFAULT 0
+                Done INTEGER NOT NULL DEFAULT 0,
+                Skipped INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS PlayCounts (
                 UserId TEXT NOT NULL,
@@ -56,6 +57,16 @@ public sealed class H4ipRepository : IDisposable
             );
             """;
         cmd.ExecuteNonQuery();
+
+        // ponytail: one-time migration for pre-skip databases
+        using var check = _connection.CreateCommand();
+        check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Suggestions') WHERE name = 'Skipped'";
+        if (Convert.ToInt64(check.ExecuteScalar()) == 0)
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Suggestions ADD COLUMN Skipped INTEGER NOT NULL DEFAULT 0";
+            alter.ExecuteNonQuery();
+        }
     }
 
     /// <summary>
@@ -83,7 +94,22 @@ public sealed class H4ipRepository : IDisposable
         lock (_lock)
         {
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "UPDATE Suggestions SET Done = 1 WHERE Artist = $artist";
+            cmd.CommandText = "UPDATE Suggestions SET Done = 1, Skipped = 0 WHERE Artist = $artist";
+            cmd.Parameters.AddWithValue("$artist", artist);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// Marks a suggestion as skipped.
+    /// </summary>
+    /// <param name="artist">The artist name.</param>
+    public void SkipSuggestion(string artist)
+    {
+        lock (_lock)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "UPDATE Suggestions SET Skipped = 1, Done = 0 WHERE Artist = $artist";
             cmd.Parameters.AddWithValue("$artist", artist);
             cmd.ExecuteNonQuery();
         }
@@ -102,7 +128,7 @@ public sealed class H4ipRepository : IDisposable
             using var cmd = _connection.CreateCommand();
 #pragma warning disable CA2100 // all queries are literals; values are parameterized
             cmd.CommandText = pendingOnly
-                ? "SELECT Id, Artist, AddedAt, Done FROM Suggestions WHERE Done = 0 ORDER BY AddedAt"
+                ? "SELECT Id, Artist, AddedAt, Done FROM Suggestions WHERE Done = 0 AND Skipped = 0 ORDER BY AddedAt"
                 : "SELECT Id, Artist, AddedAt, Done FROM Suggestions ORDER BY AddedAt";
 #pragma warning restore CA2100
             using var reader = cmd.ExecuteReader();

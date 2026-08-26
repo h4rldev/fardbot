@@ -76,6 +76,18 @@ public class H4ipController : ControllerBase
     }
 
     /// <summary>
+    /// Marks a suggestion as skipped.
+    /// </summary>
+    /// <param name="artist">The artist name.</param>
+    /// <returns>A successful response.</returns>
+    [HttpDelete("suggestions/{artist}/skip")]
+    public ActionResult SkipSuggestion([FromRoute] string artist)
+    {
+        _repository.SkipSuggestion(artist);
+        return Ok();
+    }
+
+    /// <summary>
     /// Gets the users with the most plays for an item.
     /// </summary>
     /// <param name="kind">The item type.</param>

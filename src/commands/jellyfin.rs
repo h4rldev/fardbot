@@ -55,13 +55,15 @@ async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
 
 #[derive(Deserialize)]
 struct CrownEntry {
+    #[serde(rename = "User")]
     user: String,
+    #[serde(rename = "Count")]
     count: u32,
 }
 
 #[derive(Deserialize)]
 struct TopEntry {
-    #[serde(rename = "itemName")]
+    #[serde(rename = "ItemName")]
     item_name: String,
     #[serde(rename = "Count")]
     count: u32,

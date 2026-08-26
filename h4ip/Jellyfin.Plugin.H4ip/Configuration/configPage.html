@@ -47,29 +47,52 @@
                 var list = document.querySelector('#suggestionList');
                 list.innerHTML = '';
                 if (!items.length) {
-                    list.innerHTML = '<p>No pending suggestions.</p>';
+                    list.innerHTML = '<p class="sectionDescription">No pending suggestions.</p>';
                     return;
                 }
                 items.forEach(function (item) {
                     var div = document.createElement('div');
-                    div.className = 'listItem';
+                    div.className = 'listItem listItem-border';
 
-                    var span = document.createElement('span');
-                    span.className = 'listItemBody';
-                    span.textContent = item.artist;
+                    var body = document.createElement('span');
+                    body.className = 'listItemBody';
+
+                    var name = document.createElement('h3');
+                    name.textContent = item.Artist;
+
+                    var meta = document.createElement('div');
+                    meta.className = 'secondary';
+                    meta.textContent = 'Suggested ' + new Date(item.AddedAt).toLocaleString();
+
+                    body.appendChild(name);
+                    body.appendChild(meta);
 
                     var btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.is = 'emby-button';
+                    btn.setAttribute('is', 'emby-button');
+                    btn.className = 'button-link';
                     btn.textContent = 'Done';
                     btn.addEventListener('click', function () {
                         ApiClient.fetch({
-                            url: ApiClient.getUrl('h4ip/suggestions/' + encodeURIComponent(item.artist)),
+                            url: ApiClient.getUrl('h4ip/suggestions/' + encodeURIComponent(item.Artist)),
                             type: 'DELETE'
                         }).then(loadSuggestions).then(renderSuggestions);
                     });
 
-                    div.appendChild(span);
+                    var skip = document.createElement('button');
+                    skip.type = 'button';
+                    skip.setAttribute('is', 'emby-button');
+                    skip.className = 'button-link';
+                    skip.textContent = 'Skip';
+                    skip.addEventListener('click', function () {
+                        ApiClient.fetch({
+                            url: ApiClient.getUrl('h4ip/suggestions/' + encodeURIComponent(item.Artist) + '/skip'),
+                            type: 'DELETE'
+                        }).then(loadSuggestions).then(renderSuggestions);
+                    });
+
+                    div.appendChild(body);
+                    div.appendChild(skip);
                     div.appendChild(btn);
                     list.appendChild(div);
                 });
