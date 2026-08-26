@@ -61,7 +61,7 @@ public sealed class H4ipRepository : IDisposable
         // ponytail: one-time migration for pre-skip databases
         using var check = _connection.CreateCommand();
         check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Suggestions') WHERE name = 'Skipped'";
-        if (Convert.ToInt64(check.ExecuteScalar()) == 0)
+        if (Convert.ToInt64(check.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
         {
             using var alter = _connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Suggestions ADD COLUMN Skipped INTEGER NOT NULL DEFAULT 0";
