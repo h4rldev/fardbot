@@ -35,7 +35,15 @@ async fn jf_get<T: DeserializeOwned>(path: &str, params: &[(&str, &str)]) -> Res
             .join("&"),
         response.status()
     );
-    Ok(response.json::<T>().await?)
+
+    let body = response.text().await?;
+    match serde_json::from_str::<T>(&body) {
+        Ok(value) => Ok(value),
+        Err(e) => {
+            info!("failed to decode jellyfin response for {path}: {e}; body: {body}");
+            Err(e.into())
+        }
+    }
 }
 
 async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
@@ -55,17 +63,17 @@ async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
 
 #[derive(Deserialize)]
 struct CrownEntry {
-    #[serde(rename = "User")]
+    #[serde(rename = "User", alias = "user")]
     user: String,
-    #[serde(rename = "Count")]
+    #[serde(rename = "Count", alias = "count")]
     count: u32,
 }
 
 #[derive(Deserialize)]
 struct TopEntry {
-    #[serde(rename = "ItemName")]
+    #[serde(rename = "ItemName", alias = "itemName")]
     item_name: String,
-    #[serde(rename = "Count")]
+    #[serde(rename = "Count", alias = "count")]
     count: u32,
 }
 
