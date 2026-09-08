@@ -119,7 +119,11 @@ pub async fn balls(
         Some(balls_choices) => match balls_choices {
             Balls::Single => pick_random(1, users).await?,
             Balls::Multiple => {
-                let amount = thread_rng().gen_range(3..length);
+                let amount = if length > 3 {
+                    thread_rng().gen_range(3..length)
+                } else {
+                    length
+                };
                 pick_random(amount, users).await?
             }
             Balls::All => users,

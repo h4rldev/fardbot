@@ -1,15 +1,19 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex as StdMutex},
+};
 
 use poise::serenity_prelude as serenity;
 use tokio::sync::Mutex;
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 
 mod commands;
 mod web;
 
 use commands::{
     fun::{balls, hello},
-    jellyfin::{crown, now_playing, setchannel, setup, suggest, top},
+    jellyfin::{now_playing, setchannel, setup, suggest, top, whoknows},
     utility::{get_week, ping, status},
 };
 
@@ -68,7 +72,7 @@ async fn post_command(ctx: Context<'_>) {
 }
 
 pub struct Data {
-    pub user_map: Mutex<HashMap<u64, String>>,
+    pub user_map: StdMutex<HashMap<u64, String>>,
     pub channel: Arc<Mutex<Option<serenity::ChannelId>>>,
 }
 
@@ -78,7 +82,9 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().expect(".env file not found");
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
 
     let secret = std::env::var("PLUGIN_SECRET").expect("missing PLUGIN_SECRET");
     let jellyfin_url = std::env::var("JELLYFIN_URL").expect("missing JELLYFIN_URL");
@@ -89,7 +95,7 @@ async fn main() {
     let channel = Arc::new(Mutex::new(load_channel().map(serenity::ChannelId::new)));
 
     tokio::spawn(web::serve(
-        serenity::Http::new(&token.clone()),
+        serenity::Http::new(&token),
         Arc::clone(&channel),
         secret,
         jellyfin_url,
@@ -111,7 +117,7 @@ async fn main() {
                 setchannel(),
                 top(),
                 now_playing(),
-                crown(),
+                whoknows(),
                 suggest(),
             ],
             ..Default::default()
@@ -120,7 +126,7 @@ async fn main() {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
-                    user_map: Mutex::new(load_user_map()),
+                    user_map: StdMutex::new(load_user_map()),
                     channel,
                 })
             })

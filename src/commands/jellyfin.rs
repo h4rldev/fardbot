@@ -6,10 +6,11 @@ use poise::{
         CreateEmbed,
     },
 };
-use reqwest::Client;
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{sync::LazyLock, time::Duration};
 use tracing::info;
+
+static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 static JELLYFIN_URL: LazyLock<String> =
     LazyLock::new(|| std::env::var("JELLYFIN_URL").expect("missing JELLYFIN_URL"));
@@ -17,7 +18,7 @@ static JELLYFIN_API_KEY: LazyLock<String> =
     LazyLock::new(|| std::env::var("JELLYFIN_API_KEY").expect("missing JELLYFIN_API_KEY"));
 
 async fn jf_get<T: DeserializeOwned>(path: &str, params: &[(&str, &str)]) -> Result<T, Error> {
-    let response = Client::new()
+    let response = CLIENT
         .get(format!("{}/{}", JELLYFIN_URL.as_str(), path))
         .query(params)
         .header(
@@ -47,7 +48,7 @@ async fn jf_get<T: DeserializeOwned>(path: &str, params: &[(&str, &str)]) -> Res
 }
 
 async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
-    let response = Client::new()
+    let response = CLIENT
         .post(format!("{}/{}", JELLYFIN_URL.as_str(), path))
         .header(
             "Authorization",
@@ -85,8 +86,6 @@ struct JFUser {
 
 #[derive(Deserialize)]
 struct Session {
-    #[serde(rename = "UserName")]
-    _user_name: String,
     #[serde(rename = "NowPlayingItem")]
     now_playing: Option<NowPlaying>,
 }
@@ -173,7 +172,7 @@ fn thumbnail_url(item_id: &str) -> String {
 
 async fn thumbnail_if_available(item_id: &str) -> Option<String> {
     let url = thumbnail_url(item_id);
-    reqwest::Client::new()
+    CLIENT
         .head(&url)
         .send()
         .await
@@ -224,9 +223,9 @@ async fn reply_embed_thumb(
     Ok(())
 }
 
-/// Shows the ranked listeners for an item, crown on top.
+/// Shows who knows an item — the ranked listeners, top listener first.
 #[poise::command(slash_command, category = "Jellyfin")]
-pub async fn crown(
+pub async fn whoknows(
     ctx: Context<'_>,
     #[description = "Artist, album, or track name"] name: String,
     #[description = "How many"] limit: Option<u32>,
@@ -263,7 +262,7 @@ pub async fn crown(
     let Some(hint) = hint else {
         return reply_embed(
             &ctx,
-            "Crown",
+            "Whoknows",
             format!("Couldn't find anything matching **{name}**."),
             true,
         )
@@ -272,7 +271,7 @@ pub async fn crown(
     let Some(kind) = hint_to_kind(&hint.item_type) else {
         return reply_embed(
             &ctx,
-            "Crown",
+            "Whoknows",
             format!("**{}** isn't an artist, album, or track.", hint.name),
             true,
         )
@@ -325,7 +324,7 @@ pub async fn crown(
     };
     reply_embed_thumb(
         &ctx,
-        &format!("Crown · {}", hint.name),
+        &format!("Top listeners for {}", hint.name),
         description,
         false,
         thumb,
@@ -444,9 +443,11 @@ pub async fn setup(ctx: Context<'_>) -> Result<(), Error> {
             continue;
         }
 
-        let mut map = ctx.data().user_map.lock().await;
-        map.insert(ctx.author().id.get(), modal.user_id.clone());
-        crate::save_user_map(&map);
+        {
+            let mut map = ctx.data().user_map.lock().unwrap();
+            map.insert(ctx.author().id.get(), modal.user_id.clone());
+            crate::save_user_map(&map);
+        }
 
         ctx.send(
             poise::CreateReply::default().embed(
@@ -474,7 +475,7 @@ pub async fn top(
         .data()
         .user_map
         .lock()
-        .await
+        .unwrap()
         .get(&ctx.author().id.get())
         .cloned();
     let Some(user_id) = user_id else {

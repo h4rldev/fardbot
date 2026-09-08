@@ -7,9 +7,11 @@ use axum::{
 };
 use poise::serenity_prelude::{ChannelId, CreateEmbed, CreateMessage, Http};
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
+
+static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 struct WebState {
     http: Http,
@@ -32,7 +34,7 @@ struct JellyfinEvent {
 async fn jellyfin_event(
     State(state): State<Arc<WebState>>,
     headers: HeaderMap,
-    body: Result<Json<JellyfinEvent>, JsonRejection>,
+    body: Result<Json<serde_json::Value>, JsonRejection>,
 ) -> Response {
     let secret = headers.get("x-h4ip-secret").and_then(|s| s.to_str().ok());
     if secret != Some(&state.secret) {
@@ -40,20 +42,43 @@ async fn jellyfin_event(
         return (StatusCode::UNAUTHORIZED, "Invalid secret").into_response();
     }
 
-    let Some(channel) = *state.channel.lock().await else {
-        return StatusCode::NO_CONTENT.into_response();
-    };
-
-    let Json(event) = match body {
+    let Json(value) = match body {
         Ok(body) => body,
         Err(_) => return (StatusCode::BAD_REQUEST, "Malformed body").into_response(),
     };
 
-    info!(
-        "received jellyfin event: kind={}, artist={:?}, track={:?}, album={:?}, item_id={:?}",
-        event.kind, event.artist, event.track, event.album, event.item_id
-    );
+    let events: Vec<JellyfinEvent> = match value {
+        serde_json::Value::Array(items) => match serde_json::from_value(serde_json::Value::Array(items)) {
+            Ok(events) => events,
+            Err(_) => return (StatusCode::BAD_REQUEST, "Malformed event array").into_response(),
+        },
+        value @ serde_json::Value::Object(_) => match serde_json::from_value::<JellyfinEvent>(value) {
+            Ok(event) => vec![event],
+            Err(_) => return (StatusCode::BAD_REQUEST, "Malformed event").into_response(),
+        },
+        _ => return (StatusCode::BAD_REQUEST, "Body must be an event or array of events").into_response(),
+    };
 
+    info!("received {} jellyfin event(s)", events.len());
+
+    let Some(channel) = *state.channel.lock().await else {
+        return StatusCode::NO_CONTENT.into_response();
+    };
+
+    for event in events {
+        if let Err(e) = broadcast_event(&state, channel, event).await {
+            error!("failed to broadcast an event: {e:?}");
+        }
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+async fn broadcast_event(
+    state: &WebState,
+    channel: ChannelId,
+    event: JellyfinEvent,
+) -> Result<(), crate::Error> {
     let (title, description) = match event.kind.as_str() {
         "artist_added" => ("New artist", event.artist.unwrap_or_default()),
         "track_added" => {
@@ -68,7 +93,10 @@ async fn jellyfin_event(
 
             ("New track", desc)
         }
-        _ => return (StatusCode::BAD_REQUEST, "Invalid event kind").into_response(),
+        _ => {
+            warn!("unknown jellyfin event kind: {}", event.kind);
+            return Ok(());
+        }
     };
 
     let mut embed = CreateEmbed::new().title(title).description(description);
@@ -82,27 +110,13 @@ async fn jellyfin_event(
         }
     }
 
-    match channel
-        .send_message(&state.http, CreateMessage::new().embed(embed))
-        .await
-    {
-        Ok(_) => {
-            info!("broadcast sent to channel {channel}");
-            StatusCode::NO_CONTENT.into_response()
-        }
-        Err(e) => {
-            error!("Failed to broadcast event: {:?}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to broadcast event",
-            )
-                .into_response()
-        }
-    }
+    channel.send_message(&state.http, CreateMessage::new().embed(embed)).await?;
+    info!("broadcast sent to channel {channel}");
+    Ok(())
 }
 
 async fn image_available(url: &str) -> bool {
-    reqwest::Client::new()
+    CLIENT
         .head(url)
         .send()
         .await
