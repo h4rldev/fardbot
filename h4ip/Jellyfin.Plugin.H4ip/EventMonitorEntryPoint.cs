@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.H4ip.Data;
@@ -18,8 +19,10 @@ namespace Jellyfin.Plugin.H4ip;
 /// <summary>
 /// Listens for library and playback events and pushes them to the h4bot endpoint.
 /// </summary>
-public class EventMonitorEntryPoint : IHostedService
+public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
 {
+    private const int BatchSize = 25;
+
     private readonly ILibraryManager _libraryManager;
     private readonly ISessionManager _sessionManager;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -27,10 +30,11 @@ public class EventMonitorEntryPoint : IHostedService
     private readonly H4ipRepository _repository;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
-
-    // ponytail: scan-scoped dedupe set. Grows with unique artist count (bounded for a home library);
-    // move to a DB-backed "already announced" check if it ever grows unbounded.
     private readonly HashSet<string> _announcedArtists = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<Guid> _existingItemIds = new();
+    private readonly Channel<object> _eventQueue = Channel.CreateUnbounded<object>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly CancellationTokenSource _cts = new();
+    private Task _drainerTask = Task.CompletedTask;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="EventMonitorEntryPoint"/> class.
@@ -63,12 +67,44 @@ public class EventMonitorEntryPoint : IHostedService
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        try
+        {
+            _existingItemIds.UnionWith(_libraryManager.GetItemIds(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Audio, BaseItemKind.MusicArtist },
+                Recursive = true,
+            }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to snapshot existing library items");
+        }
+
         _libraryManager.ItemAdded += OnItemAdded;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
+        _drainerTask = Task.Run(() => DrainEventsAsync(_cts.Token), CancellationToken.None);
 
         try
         {
-            BackfillPlayCounts();
+            if (_repository.IsBackfilled())
+            {
+                return Task.CompletedTask;
+            }
+
+            _ = Task.Run(
+                () =>
+                {
+                    try
+                    {
+                        BackfillPlayCounts();
+                        _repository.MarkBackfilled();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to backfill play counts");
+                    }
+                },
+                CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -79,11 +115,28 @@ public class EventMonitorEntryPoint : IHostedService
     }
 
     /// <inheritdoc />
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
         _libraryManager.ItemAdded -= OnItemAdded;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
-        return Task.CompletedTask;
+        await _cts.CancelAsync().ConfigureAwait(false);
+        try
+        {
+            await _drainerTask.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (TimeoutException)
+        {
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _cts.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -93,8 +146,14 @@ public class EventMonitorEntryPoint : IHostedService
     /// <param name="e">The event arguments.</param>
     private void OnItemAdded(object? sender, ItemChangeEventArgs e)
     {
+        if (_existingItemIds.Contains(e.Item.Id))
+        {
+            return;
+        }
+
         if (e.Item is MusicArtist artist)
         {
+            _existingItemIds.Add(artist.Id);
             _announcedArtists.Add(artist.Name);
             _logger.LogInformation("New artist added: {Artist}", artist.Name);
             PostEvent(new { kind = "artist_added", artist = artist.Name, itemId = artist.Id.ToString("N") });
@@ -103,6 +162,7 @@ public class EventMonitorEntryPoint : IHostedService
 
         if (e.Item is Audio audio)
         {
+            _existingItemIds.Add(audio.Id);
             AnnounceTrack(audio);
         }
     }
@@ -165,7 +225,7 @@ public class EventMonitorEntryPoint : IHostedService
     }
 
     /// <summary>
-    /// Triggers an event broadcast.
+    /// Queues an event for batched broadcast.
     /// </summary>
     /// <param name="payload">The payload.</param>
     private void PostEvent(object payload)
@@ -177,30 +237,76 @@ public class EventMonitorEntryPoint : IHostedService
             return;
         }
 
-        _ = Task.Run(async () =>
+        _eventQueue.Writer.TryWrite(payload);
+    }
+
+    /// <summary>
+    /// Drains queued events and posts them to the bot in batches.
+    /// </summary>
+    /// <param name="token">Cancellation token.</param>
+    private async Task DrainEventsAsync(CancellationToken token)
+    {
+        try
         {
-            try
+            while (await _eventQueue.Reader.WaitToReadAsync(token).ConfigureAwait(false))
             {
-                using var client = _httpClientFactory.CreateClient();
+                var batch = new List<object>();
+                while (batch.Count < BatchSize && _eventQueue.Reader.TryRead(out var payload))
+                {
+                    batch.Add(payload);
+                }
+
+                await PostBatchAsync(batch, token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Posts a batch of events to the bot endpoint.
+    /// </summary>
+    /// <param name="batch">The batch of payloads.</param>
+    /// <param name="token">Cancellation token.</param>
+    private async Task PostBatchAsync(List<object> batch, CancellationToken token)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var client = _httpClientFactory.CreateClient();
+            _logger.LogInformation("Broadcasting {Count} events to {Url}", batch.Count, config.BotUrl);
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
                 using var request = new HttpRequestMessage(HttpMethod.Post, $"{config.BotUrl}/jellyfin/event");
                 request.Headers.Add("X-H4ip-Secret", config.SharedSecret);
-                request.Content = JsonContent.Create(payload);
-                _logger.LogInformation("Broadcasting event to {Url}", config.BotUrl);
-                using var response = await client.SendAsync(request).ConfigureAwait(false);
+                request.Content = JsonContent.Create(batch);
+                using var response = await client.SendAsync(request, token).ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation("Broadcast succeeded ({Status})", response.StatusCode);
+                    return;
                 }
-                else
+
+                _logger.LogWarning("Broadcast returned {Status}", response.StatusCode);
+                if (attempt == 0)
                 {
-                    _logger.LogWarning("Broadcast returned {Status}", response.StatusCode);
+                    await Task.Delay(500, token).ConfigureAwait(false);
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to broadcast event");
-            }
-        });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to broadcast events");
+        }
     }
 
     /// <summary>
@@ -210,6 +316,7 @@ public class EventMonitorEntryPoint : IHostedService
     {
         foreach (var user in _userManager.GetUsers())
         {
+            var userId = user.Id.ToString();
             var result = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
             {
                 IncludeItemTypes = new[] { BaseItemKind.Audio },
@@ -217,6 +324,9 @@ public class EventMonitorEntryPoint : IHostedService
                 Recursive = true,
             });
 
+            // Aggregate per (type, name): artist/album counts must sum every track's plays,
+            // not just the first one encountered.
+            var counts = new Dictionary<(string Type, string Name), int>();
             foreach (var item in result.Items)
             {
                 if (item is not Audio audio)
@@ -230,24 +340,34 @@ public class EventMonitorEntryPoint : IHostedService
                     continue;
                 }
 
-                var userId = user.Id.ToString();
                 var artist = GetArtistName(audio);
-
                 if (!string.IsNullOrEmpty(artist))
                 {
-                    _repository.SeedPlayCount(userId, "artist", artist, playCount);
+                    AddToCount(counts, "artist", artist, playCount);
                 }
 
                 if (!string.IsNullOrEmpty(audio.Album))
                 {
-                    _repository.SeedPlayCount(userId, "album", audio.Album, playCount);
+                    AddToCount(counts, "album", audio.Album, playCount);
                 }
 
                 if (!string.IsNullOrEmpty(audio.Name))
                 {
-                    _repository.SeedPlayCount(userId, "track", audio.Name, playCount);
+                    AddToCount(counts, "track", audio.Name, playCount);
                 }
             }
+
+            foreach (var (key, count) in counts)
+            {
+                _repository.SeedPlayCount(userId, key.Type, key.Name, count);
+            }
+        }
+
+        static void AddToCount(Dictionary<(string Type, string Name), int> counts, string type, string name, int plays)
+        {
+            var key = (type, name);
+            counts.TryGetValue(key, out var current);
+            counts[key] = current + plays;
         }
     }
 }

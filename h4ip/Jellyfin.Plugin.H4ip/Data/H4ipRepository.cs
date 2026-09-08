@@ -56,10 +56,13 @@ public sealed class H4ipRepository : IDisposable
                 Count INTEGER NOT NULL,
                 PRIMARY KEY (UserId, ItemType, ItemName)
             );
+            CREATE TABLE IF NOT EXISTS Metadata (
+                Key TEXT PRIMARY KEY,
+                Value TEXT NOT NULL
+            );
             """;
         cmd.ExecuteNonQuery();
 
-        // ponytail: one-time migrations for pre-skip/pre-count databases
         using var check = _connection.CreateCommand();
         check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Suggestions') WHERE name = 'Skipped'";
         if (Convert.ToInt64(check.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
@@ -75,6 +78,37 @@ public sealed class H4ipRepository : IDisposable
             using var alter = _connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Suggestions ADD COLUMN Count INTEGER NOT NULL DEFAULT 1";
             alter.ExecuteNonQuery();
+        }
+
+        using var index = _connection.CreateCommand();
+        index.CommandText = "CREATE INDEX IF NOT EXISTS idx_playcounts_item ON PlayCounts(ItemType, ItemName)";
+        index.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Gets whether the play count backfill has run.
+    /// </summary>
+    /// <returns>True if the backfill has been marked as complete.</returns>
+    public bool IsBackfilled()
+    {
+        lock (_lock)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM Metadata WHERE Key = 'Backfilled'";
+            return cmd.ExecuteScalar() is not null;
+        }
+    }
+
+    /// <summary>
+    /// Marks the play count backfill as complete.
+    /// </summary>
+    public void MarkBackfilled()
+    {
+        lock (_lock)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "INSERT OR REPLACE INTO Metadata (Key, Value) VALUES ('Backfilled', '1')";
+            cmd.ExecuteNonQuery();
         }
     }
 
@@ -119,7 +153,12 @@ public sealed class H4ipRepository : IDisposable
         lock (_lock)
         {
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "INSERT OR IGNORE INTO PlayCounts (UserId, ItemType, ItemName, Count) VALUES ($uid, $type, $name, $count)";
+            cmd.CommandText =
+                """
+                INSERT INTO PlayCounts (UserId, ItemType, ItemName, Count)
+                VALUES ($uid, $type, $name, $count)
+                ON CONFLICT (UserId, ItemType, ItemName) DO UPDATE SET Count = excluded.Count
+                """;
             cmd.Parameters.AddWithValue("$uid", userId);
             cmd.Parameters.AddWithValue("$type", itemType);
             cmd.Parameters.AddWithValue("$name", itemName);
