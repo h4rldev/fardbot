@@ -1,0 +1,15 @@
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/bin/Release/net9.0/Jellyfin.Plugin.H4ip.deps.json
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/bin/Release/net9.0/Jellyfin.Plugin.H4ip.dll
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/bin/Release/net9.0/Jellyfin.Plugin.H4ip.pdb
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/bin/Release/net9.0/Jellyfin.Plugin.H4ip.xml
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.csproj.AssemblyReference.cache
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.GeneratedMSBuildEditorConfig.editorconfig
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.AssemblyInfoInputs.cache
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.AssemblyInfo.cs
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.csproj.CoreCompileInputs.cache
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.sourcelink.json
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.dll
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/refint/Jellyfin.Plugin.H4ip.dll
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.xml
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/Jellyfin.Plugin.H4ip.pdb
+/home/runner/work/fardbot/fardbot/h4ip/Jellyfin.Plugin.H4ip/obj/Release/net9.0/ref/Jellyfin.Plugin.H4ip.dll

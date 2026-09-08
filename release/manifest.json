@@ -1,0 +1,20 @@
+[
+    {
+        "guid": "d8785d47-e35e-434c-b8ad-2612e1ca87b7",
+        "name": "h4ip",
+        "description": "A small Jellyfin plugin that integrates with h4bot/fardbot for artist suggestions, crowns and top listeners.\n",
+        "overview": "h4bot/fardbot Integration plugin (h4ip): Artist suggestions, crowns and top listeners.",
+        "owner": "jellyfin",
+        "category": "General",
+        "versions": [
+            {
+                "version": "1.0.0.27",
+                "changelog": "First release.\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://raw.githubusercontent.com/h4rldev/fardbot/manifest-release/h4ip/h4ip_1.0.0.27.zip",
+                "checksum": "9d024fd844de5cf0174b08275bd87c91",
+                "timestamp": "2026-09-08T19:52:51Z"
+            }
+        ]
+    }
+]
