@@ -104,6 +104,6 @@ public static class PlayCountBackfill
     /// <param name="audio">The audio item.</param>
     private static string? GetArtistName(Audio audio)
     {
-        return audio.AlbumArtists.Count > 0 ? audio.AlbumArtists[0] : audio.Artists.Count > 0 ? audio.Artists[0] : null;
+        return audio.Artists.Count > 0 ? audio.Artists[0] : audio.AlbumArtists.Count > 0 ? audio.AlbumArtists[0] : null;
     }
 }

@@ -307,7 +307,7 @@ pub async fn whoknows(
                 .enumerate()
                 .map(|(i, e)| {
                     if i == 0 {
-                        format!("{}. **{}** — {} plays 👑", i + 1, e.user, e.count)
+                        format!("{}. 👑 **{}** — {} plays", i + 1, e.user, e.count)
                     } else {
                         format!("{}. **{}** — {} plays", i + 1, e.user, e.count)
                     }

@@ -229,7 +229,7 @@ public sealed class H4ipRepository : IDisposable
             var results = new List<(string, int)>();
             using var cmd = _connection.CreateCommand();
             cmd.CommandText =
-                "SELECT ItemName, Count FROM PlayCounts WHERE UserId = $uid AND ItemType = $type ORDER BY Count DESC, ItemName LIMIT $limit";
+                "SELECT MIN(ItemName), SUM(Count) FROM PlayCounts WHERE UserId = $uid AND ItemType = $type GROUP BY ItemName COLLATE NOCASE ORDER BY SUM(Count) DESC, MIN(ItemName) LIMIT $limit";
             cmd.Parameters.AddWithValue("$uid", userId);
             cmd.Parameters.AddWithValue("$type", itemType);
             cmd.Parameters.AddWithValue("$limit", limit);
@@ -237,7 +237,7 @@ public sealed class H4ipRepository : IDisposable
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                results.Add((reader.GetString(0), reader.GetInt32(1)));
+                results.Add((reader.GetString(0), (int)reader.GetInt64(1)));
             }
 
             return results;
@@ -258,7 +258,7 @@ public sealed class H4ipRepository : IDisposable
             var results = new List<(string, int)>();
             using var cmd = _connection.CreateCommand();
 
-            cmd.CommandText = "SELECT UserId, Count FROM PlayCounts WHERE ItemType = $type AND ItemName = $name ORDER BY Count DESC, UserId LIMIT $limit";
+            cmd.CommandText = "SELECT UserId, SUM(Count) FROM PlayCounts WHERE ItemType = $type AND ItemName = $name COLLATE NOCASE GROUP BY UserId ORDER BY SUM(Count) DESC, UserId LIMIT $limit";
             cmd.Parameters.AddWithValue("$type", itemType);
             cmd.Parameters.AddWithValue("$name", itemName);
             cmd.Parameters.AddWithValue("$limit", limit);
@@ -266,7 +266,7 @@ public sealed class H4ipRepository : IDisposable
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                results.Add((reader.GetString(0), reader.GetInt32(1)));
+                results.Add((reader.GetString(0), (int)reader.GetInt64(1)));
             }
 
             return results;
