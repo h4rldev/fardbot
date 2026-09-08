@@ -84,32 +84,21 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
         _drainerTask = Task.Run(() => DrainEventsAsync(_cts.Token), CancellationToken.None);
 
-        try
-        {
-            if (_repository.IsBackfilled())
+        // Jellyfin's UserData.PlayCount is the source of truth, so recompute the cache on
+        // every boot. SeedPlayCount overwrites, so this converges and self-heals stale data.
+        _ = Task.Run(
+            () =>
             {
-                return Task.CompletedTask;
-            }
-
-            _ = Task.Run(
-                () =>
+                try
                 {
-                    try
-                    {
-                        BackfillPlayCounts();
-                        _repository.MarkBackfilled();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to backfill play counts");
-                    }
-                },
-                CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to backfill play counts");
-        }
+                    BackfillPlayCounts();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to backfill play counts");
+                }
+            },
+            CancellationToken.None);
 
         return Task.CompletedTask;
     }
@@ -314,60 +303,6 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
     /// </summary>
     private void BackfillPlayCounts()
     {
-        foreach (var user in _userManager.GetUsers())
-        {
-            var userId = user.Id.ToString();
-            var result = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                IsPlayed = true,
-                Recursive = true,
-            });
-
-            // Aggregate per (type, name): artist/album counts must sum every track's plays,
-            // not just the first one encountered.
-            var counts = new Dictionary<(string Type, string Name), int>();
-            foreach (var item in result.Items)
-            {
-                if (item is not Audio audio)
-                {
-                    continue;
-                }
-
-                var playCount = _userDataManager.GetUserData(user, item)?.PlayCount ?? 0;
-                if (playCount <= 0)
-                {
-                    continue;
-                }
-
-                var artist = GetArtistName(audio);
-                if (!string.IsNullOrEmpty(artist))
-                {
-                    AddToCount(counts, "artist", artist, playCount);
-                }
-
-                if (!string.IsNullOrEmpty(audio.Album))
-                {
-                    AddToCount(counts, "album", audio.Album, playCount);
-                }
-
-                if (!string.IsNullOrEmpty(audio.Name))
-                {
-                    AddToCount(counts, "track", audio.Name, playCount);
-                }
-            }
-
-            foreach (var (key, count) in counts)
-            {
-                _repository.SeedPlayCount(userId, key.Type, key.Name, count);
-            }
-        }
-
-        static void AddToCount(Dictionary<(string Type, string Name), int> counts, string type, string name, int plays)
-        {
-            var key = (type, name);
-            counts.TryGetValue(key, out var current);
-            counts[key] = current + plays;
-        }
+        PlayCountBackfill.Run(_userManager, _libraryManager, _userDataManager, _repository, _logger);
     }
 }

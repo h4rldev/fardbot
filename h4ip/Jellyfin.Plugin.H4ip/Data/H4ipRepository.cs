@@ -56,10 +56,6 @@ public sealed class H4ipRepository : IDisposable
                 Count INTEGER NOT NULL,
                 PRIMARY KEY (UserId, ItemType, ItemName)
             );
-            CREATE TABLE IF NOT EXISTS Metadata (
-                Key TEXT PRIMARY KEY,
-                Value TEXT NOT NULL
-            );
             """;
         cmd.ExecuteNonQuery();
 
@@ -83,33 +79,6 @@ public sealed class H4ipRepository : IDisposable
         using var index = _connection.CreateCommand();
         index.CommandText = "CREATE INDEX IF NOT EXISTS idx_playcounts_item ON PlayCounts(ItemType, ItemName)";
         index.ExecuteNonQuery();
-    }
-
-    /// <summary>
-    /// Gets whether the play count backfill has run.
-    /// </summary>
-    /// <returns>True if the backfill has been marked as complete.</returns>
-    public bool IsBackfilled()
-    {
-        lock (_lock)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT COUNT(*) FROM Metadata WHERE Key = 'Backfilled'";
-            return cmd.ExecuteScalar() is not null;
-        }
-    }
-
-    /// <summary>
-    /// Marks the play count backfill as complete.
-    /// </summary>
-    public void MarkBackfilled()
-    {
-        lock (_lock)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "INSERT OR REPLACE INTO Metadata (Key, Value) VALUES ('Backfilled', '1')";
-            cmd.ExecuteNonQuery();
-        }
     }
 
     /// <summary>
