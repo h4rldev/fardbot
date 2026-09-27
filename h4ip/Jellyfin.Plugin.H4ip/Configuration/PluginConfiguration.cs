@@ -12,7 +12,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public PluginConfiguration()
     {
-        BotUrl = "localhost:8080";
+        BotUrl = "http://localhost:8080";
         SharedSecret = string.Empty;
     }
 

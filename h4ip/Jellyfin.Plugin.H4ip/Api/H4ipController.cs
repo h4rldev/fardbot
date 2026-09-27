@@ -43,7 +43,7 @@ public class H4ipController : ControllerBase
     public ActionResult<IEnumerable<object>> GetSuggestions([FromQuery] bool all = false)
     {
         var rows = _repository.GetSuggestions(pendingOnly: !all);
-        return Ok(rows.Select(r => new { r.Id, r.Artist, r.AddedAt, r.Done, r.Count }));
+        return Ok(rows.Select(r => new { r.Id, r.Artist, r.Notes, r.AddedAt, r.Done, r.Count }));
     }
 
     /// <summary>
@@ -59,7 +59,20 @@ public class H4ipController : ControllerBase
             return BadRequest("Artist name is required");
         }
 
-        _repository.AddSuggestion(request.Artist);
+        _repository.AddSuggestion(request.Artist, request.Notes);
+        return Ok();
+    }
+
+    /// <summary>
+    /// Updates a suggestion's notes.
+    /// </summary>
+    /// <param name="artist">The artist name.</param>
+    /// <param name="request">The request body.</param>
+    /// <returns>A successful response.</returns>
+    [HttpPut("suggestions/{artist}/notes")]
+    public ActionResult UpdateNotes([FromRoute] string artist, [FromBody] AddSuggestionRequest request)
+    {
+        _repository.SetSuggestionNotes(artist, request.Notes ?? string.Empty);
         return Ok();
     }
 

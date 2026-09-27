@@ -44,6 +44,7 @@ public sealed class H4ipRepository : IDisposable
             CREATE TABLE IF NOT EXISTS Suggestions (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Artist TEXT NOT NULL,
+                Notes TEXT,
                 AddedAt TEXT NOT NULL,
                 Done INTEGER NOT NULL DEFAULT 0,
                 Skipped INTEGER NOT NULL DEFAULT 0,
@@ -76,6 +77,14 @@ public sealed class H4ipRepository : IDisposable
             alter.ExecuteNonQuery();
         }
 
+        check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Suggestions') WHERE name = 'Notes'";
+        if (Convert.ToInt64(check.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Suggestions ADD COLUMN Notes TEXT";
+            alter.ExecuteNonQuery();
+        }
+
         using var index = _connection.CreateCommand();
         index.CommandText = "CREATE INDEX IF NOT EXISTS idx_playcounts_item ON PlayCounts(ItemType, ItemName)";
         index.ExecuteNonQuery();
@@ -85,7 +94,8 @@ public sealed class H4ipRepository : IDisposable
     /// Adds a suggestion.
     /// </summary>
     /// <param name="artist">The artist name.</param>
-    public void AddSuggestion(string artist)
+    /// <param name="notes">The optional notes.</param>
+    public void AddSuggestion(string artist, string? notes)
     {
         lock (_lock)
         {
@@ -96,15 +106,31 @@ public sealed class H4ipRepository : IDisposable
             if (existingId is not null)
             {
                 using var inc = _connection.CreateCommand();
-                inc.CommandText = "UPDATE Suggestions SET Count = Count + 1 WHERE Id = $id";
+                inc.CommandText = "UPDATE Suggestions SET Count = Count + 1, Notes = COALESCE(NULLIF($notes, ''), Notes) WHERE Id = $id";
                 inc.Parameters.AddWithValue("$id", Convert.ToInt64(existingId, CultureInfo.InvariantCulture));
+                inc.Parameters.AddWithValue("$notes", notes ?? string.Empty);
                 inc.ExecuteNonQuery();
                 return;
             }
 
+            using var skipped = _connection.CreateCommand();
+            skipped.CommandText = "SELECT Id FROM Suggestions WHERE Artist = $artist COLLATE NOCASE AND Skipped = 1";
+            skipped.Parameters.AddWithValue("$artist", artist);
+            var skippedId = skipped.ExecuteScalar();
+            if (skippedId is not null)
+            {
+                using var resurface = _connection.CreateCommand();
+                resurface.CommandText = "UPDATE Suggestions SET Skipped = 0, Done = 0, Count = Count + 1, Notes = COALESCE(NULLIF($notes, ''), Notes) WHERE Id = $id";
+                resurface.Parameters.AddWithValue("$id", Convert.ToInt64(skippedId, CultureInfo.InvariantCulture));
+                resurface.Parameters.AddWithValue("$notes", notes ?? string.Empty);
+                resurface.ExecuteNonQuery();
+                return;
+            }
+
             using var insert = _connection.CreateCommand();
-            insert.CommandText = "INSERT INTO Suggestions (Artist, AddedAt, Done, Skipped, Count) VALUES ($artist, $at, 0, 0, 1)";
+            insert.CommandText = "INSERT INTO Suggestions (Artist, Notes, AddedAt, Done, Skipped, Count) VALUES ($artist, $notes, $at, 0, 0, 1)";
             insert.Parameters.AddWithValue("$artist", artist);
+            insert.Parameters.AddWithValue("$notes", notes ?? string.Empty);
             insert.Parameters.AddWithValue("$at", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
             insert.ExecuteNonQuery();
         }
@@ -171,24 +197,41 @@ public sealed class H4ipRepository : IDisposable
     /// </summary>
     /// <param name="pendingOnly">Whether to only return pending suggestions.</param>
     /// <returns>A list of suggestions.</returns>
-    public IReadOnlyList<(long Id, string Artist, string AddedAt, bool Done, int Count)> GetSuggestions(bool pendingOnly)
+    public IReadOnlyList<(long Id, string Artist, string Notes, string AddedAt, bool Done, int Count)> GetSuggestions(bool pendingOnly)
     {
         lock (_lock)
         {
-            var results = new List<(long, string, string, bool, int)>();
+            var results = new List<(long, string, string, string, bool, int)>();
             using var cmd = _connection.CreateCommand();
 #pragma warning disable CA2100 // all queries are literals; values are parameterized
             cmd.CommandText = pendingOnly
-                ? "SELECT Id, Artist, AddedAt, Done, Count FROM Suggestions WHERE Done = 0 AND Skipped = 0 ORDER BY Count DESC, AddedAt"
-                : "SELECT Id, Artist, AddedAt, Done, Count FROM Suggestions ORDER BY Count DESC, AddedAt";
+                ? "SELECT Id, Artist, Notes, AddedAt, Done, Count FROM Suggestions WHERE Done = 0 AND Skipped = 0 ORDER BY Count DESC, AddedAt"
+                : "SELECT Id, Artist, Notes, AddedAt, Done, Count FROM Suggestions ORDER BY Count DESC, AddedAt";
 #pragma warning restore CA2100
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                results.Add((reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetInt64(3) != 0, reader.GetInt32(4)));
+                results.Add((reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? string.Empty : reader.GetString(2), reader.GetString(3), reader.GetInt64(4) != 0, reader.GetInt32(5)));
             }
 
             return results;
+        }
+    }
+
+    /// <summary>
+    /// Set the notes on a suggestion.
+    /// </summary>
+    /// <param name="artist">The artist name.</param>
+    /// <param name="notes">The notes.</param>
+    public void SetSuggestionNotes(string artist, string notes)
+    {
+        lock (_lock)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "UPDATE Suggestions SET Notes = $notes WHERE Artist = $artist";
+            cmd.Parameters.AddWithValue("$notes", notes);
+            cmd.Parameters.AddWithValue("$artist", artist);
+            cmd.ExecuteNonQuery();
         }
     }
 

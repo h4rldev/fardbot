@@ -7,11 +7,9 @@ use axum::{
 };
 use poise::serenity_prelude::{ChannelId, CreateEmbed, CreateMessage, Http};
 use serde::Deserialize;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
-
-static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 struct WebState {
     http: Http,
@@ -48,15 +46,27 @@ async fn jellyfin_event(
     };
 
     let events: Vec<JellyfinEvent> = match value {
-        serde_json::Value::Array(items) => match serde_json::from_value(serde_json::Value::Array(items)) {
-            Ok(events) => events,
-            Err(_) => return (StatusCode::BAD_REQUEST, "Malformed event array").into_response(),
-        },
-        value @ serde_json::Value::Object(_) => match serde_json::from_value::<JellyfinEvent>(value) {
-            Ok(event) => vec![event],
-            Err(_) => return (StatusCode::BAD_REQUEST, "Malformed event").into_response(),
-        },
-        _ => return (StatusCode::BAD_REQUEST, "Body must be an event or array of events").into_response(),
+        serde_json::Value::Array(items) => {
+            match serde_json::from_value(serde_json::Value::Array(items)) {
+                Ok(events) => events,
+                Err(_) => {
+                    return (StatusCode::BAD_REQUEST, "Malformed event array").into_response();
+                }
+            }
+        }
+        value @ serde_json::Value::Object(_) => {
+            match serde_json::from_value::<JellyfinEvent>(value) {
+                Ok(event) => vec![event],
+                Err(_) => return (StatusCode::BAD_REQUEST, "Malformed event").into_response(),
+            }
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Body must be an event or array of events",
+            )
+                .into_response();
+        }
     };
 
     info!("received {} jellyfin event(s)", events.len());
@@ -105,23 +115,14 @@ async fn broadcast_event(
             "{}/Items/{}/Images/Primary?maxWidth=200&ApiKey={}",
             state.jellyfin_url, item_id, state.api_key
         );
-        if image_available(&url).await {
-            embed = embed.thumbnail(url);
-        }
+        embed = embed.thumbnail(url);
     }
 
-    channel.send_message(&state.http, CreateMessage::new().embed(embed)).await?;
+    channel
+        .send_message(&state.http, CreateMessage::new().embed(embed))
+        .await?;
     info!("broadcast sent to channel {channel}");
     Ok(())
-}
-
-async fn image_available(url: &str) -> bool {
-    CLIENT
-        .head(url)
-        .send()
-        .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
 }
 
 pub async fn serve(

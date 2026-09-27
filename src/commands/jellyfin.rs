@@ -10,7 +10,12 @@ use serde::{Deserialize, de::DeserializeOwned};
 use std::{sync::LazyLock, time::Duration};
 use tracing::info;
 
-static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to build reqwest client")
+});
 
 static JELLYFIN_URL: LazyLock<String> =
     LazyLock::new(|| std::env::var("JELLYFIN_URL").expect("missing JELLYFIN_URL"));
@@ -19,7 +24,11 @@ static JELLYFIN_API_KEY: LazyLock<String> =
 
 async fn jf_get<T: DeserializeOwned>(path: &str, params: &[(&str, &str)]) -> Result<T, Error> {
     let response = CLIENT
-        .get(format!("{}/{}", JELLYFIN_URL.as_str(), path))
+        .get(format!(
+            "{}/{}",
+            JELLYFIN_URL.as_str().trim_end_matches('/'),
+            path.trim_start_matches('/')
+        ))
         .query(params)
         .header(
             "Authorization",
@@ -49,7 +58,11 @@ async fn jf_get<T: DeserializeOwned>(path: &str, params: &[(&str, &str)]) -> Res
 
 async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
     let response = CLIENT
-        .post(format!("{}/{}", JELLYFIN_URL.as_str(), path))
+        .post(format!(
+            "{}/{}",
+            JELLYFIN_URL.as_str().trim_end_matches('/'),
+            path.trim_start_matches('/')
+        ))
         .header(
             "Authorization",
             format!("MediaBrowser Token=\"{}\"", JELLYFIN_API_KEY.as_str()),
@@ -57,7 +70,13 @@ async fn jf_post(path: &str, body: &serde_json::Value) -> Result<(), Error> {
         .json(body)
         .send()
         .await?;
-    info!("jellyfin POST {path} -> {}", response.status());
+
+    let status = response.status();
+    info!("jellyfin POST {path} -> {}", status);
+
+    if !status.is_success() {
+        return Err(format!("jellyfin POST {path} returned {status}").into());
+    }
 
     Ok(())
 }
@@ -86,16 +105,20 @@ struct JFUser {
 
 #[derive(Deserialize)]
 struct Session {
+    #[serde(rename = "UserId")]
+    user_id: Option<String>,
     #[serde(rename = "NowPlayingItem")]
     now_playing: Option<NowPlaying>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct NowPlaying {
     #[serde(rename = "Name")]
     name: String,
     #[serde(rename = "Id")]
     id: String,
+    #[serde(rename = "Artists")]
+    artists: Option<Vec<String>>,
     #[serde(rename = "AlbumArtist")]
     album_artist: Option<String>,
     #[serde(rename = "Album")]
@@ -170,15 +193,25 @@ fn thumbnail_url(item_id: &str) -> String {
     )
 }
 
-async fn thumbnail_if_available(item_id: &str) -> Option<String> {
-    let url = thumbnail_url(item_id);
-    CLIENT
-        .head(&url)
-        .send()
+fn linked_user(ctx: &Context<'_>) -> Option<String> {
+    ctx.data()
+        .user_map
+        .lock()
+        .unwrap()
+        .get(&ctx.author().id.get())
+        .cloned()
+}
+
+async fn current_audio(user_id: &str) -> Option<NowPlaying> {
+    let sessions: Vec<Session> = jf_get("Sessions", &[("activeWithinSeconds", "120")])
         .await
-        .map(|r| r.status().is_success().then_some(url))
-        .ok()
-        .flatten()
+        .ok()?;
+    sessions
+        .iter()
+        .filter(|s| s.user_id.as_deref() == Some(user_id))
+        .filter_map(|s| s.now_playing.as_ref())
+        .find(|np| np.item_type == "Audio")
+        .cloned()
 }
 
 async fn resolve_item_id(kind: &ItemKind, name: &str) -> Option<String> {
@@ -227,10 +260,49 @@ async fn reply_embed_thumb(
 #[poise::command(slash_command, category = "Jellyfin")]
 pub async fn whoknows(
     ctx: Context<'_>,
-    #[description = "Artist, album, or track name"] name: String,
+    #[description = "Artist, album, or track name (default to what's playing)"] name: Option<
+        String,
+    >,
     #[description = "How many"] limit: Option<u32>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
+
+    let name = match name {
+        Some(name) => name,
+        None => {
+            let Some(user_id) = linked_user(&ctx) else {
+                return reply_embed(
+                    &ctx,
+                    "Not linked",
+                    "Run `/setup` first to link your Jellyfin account.".into(),
+                    true,
+                )
+                .await;
+            };
+
+            match current_audio(&user_id)
+                .await
+                .and_then(|np| {
+                    np.artists
+                        .as_ref()
+                        .and_then(|a| a.first().cloned())
+                        .or_else(|| np.album_artist.clone())
+                })
+                .filter(|a| !a.is_empty())
+            {
+                Some(artist) => artist,
+                None => {
+                    return reply_embed(
+                        &ctx,
+                        "Whoknows",
+                        "You're not playing anything right now.".into(),
+                        true,
+                    )
+                    .await;
+                }
+            }
+        }
+    };
 
     let search: SearchHints = jf_get(
         "Search/Hints",
@@ -307,7 +379,7 @@ pub async fn whoknows(
                 .enumerate()
                 .map(|(i, e)| {
                     if i == 0 {
-                        format!("{}. 👑 **{}** — {} plays", i + 1, e.user, e.count)
+                        format!("{}. **{}** — {} plays 👑", i + 1, e.user, e.count)
                     } else {
                         format!("{}. **{}** — {} plays", i + 1, e.user, e.count)
                     }
@@ -320,7 +392,7 @@ pub async fn whoknows(
     let thumb = if hint.item_id.is_empty() {
         None
     } else {
-        thumbnail_if_available(&hint.item_id).await
+        Some(thumbnail_url(&hint.item_id))
     };
     reply_embed_thumb(
         &ctx,
@@ -337,42 +409,51 @@ pub async fn whoknows(
 pub async fn suggest(
     ctx: Context<'_>,
     #[description = "Artist to suggest"] artist: String,
+    #[description = "Optional notes for the suggestion"] notes: Option<String>,
 ) -> Result<(), Error> {
     jf_post(
         "/h4ip/suggestions",
-        &serde_json::json!({ "artist": artist }),
+        &serde_json::json!({ "artist": artist, "notes": notes }),
     )
     .await?;
-    reply_embed(
-        &ctx,
-        "Suggestion added!",
-        format!("**{artist}** was added to the queue."),
-        true,
-    )
-    .await
+
+    let msg = if notes.is_some() {
+        format!(
+            "**{artist}** was added to the queue, with notes:\n`{}`",
+            notes.unwrap()
+        )
+    } else {
+        format!("**{artist}** was added to the queue.")
+    };
+
+    reply_embed(&ctx, "Suggestion added!", msg, true).await
 }
 
-/// Shows what's currently playing on the Jellyfin server.
+/// Shows what you're currently playing on the Jellyfin server.
 #[poise::command(slash_command, category = "Jellyfin")]
 pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
 
-    let sessions: Vec<Session> = jf_get("Sessions", &[("activeWithinSeconds", "120")]).await?;
-    let Some(session) = sessions.iter().find(|s| {
-        s.now_playing
-            .as_ref()
-            .is_some_and(|np| np.item_type == "Audio")
-    }) else {
+    let Some(user_id) = linked_user(&ctx) else {
+        return reply_embed(
+            &ctx,
+            "Not Linked",
+            "Run `/setup` first to link your Jellyfin account.".into(),
+            true,
+        )
+        .await;
+    };
+
+    let Some(np) = current_audio(&user_id).await else {
         return reply_embed(
             &ctx,
             "Now Playing",
-            "Nothing is playing right now.".into(),
+            "You're not playing anything right now.".into(),
             false,
         )
         .await;
     };
 
-    let np = session.now_playing.as_ref().unwrap();
     let artist = np.album_artist.as_deref().unwrap_or("unknown");
     let album = np.album.as_deref().unwrap_or("");
     let description = if album.is_empty() {
@@ -383,7 +464,7 @@ pub async fn now_playing(ctx: Context<'_>) -> Result<(), Error> {
     let thumb = if np.id.is_empty() {
         None
     } else {
-        thumbnail_if_available(&np.id).await
+        Some(thumbnail_url(&np.id))
     };
     reply_embed_thumb(&ctx, &np.name, description, false, thumb).await
 }
@@ -445,7 +526,7 @@ pub async fn setup(ctx: Context<'_>) -> Result<(), Error> {
 
         {
             let mut map = ctx.data().user_map.lock().unwrap();
-            map.insert(ctx.author().id.get(), modal.user_id.clone());
+            map.insert(ctx.author().id.get(), modal.user_id.to_lowercase());
             crate::save_user_map(&map);
         }
 
@@ -513,10 +594,9 @@ pub async fn top(
             .enumerate()
             .map(|(i, e)| format!("{}. **{}** — {} plays", i + 1, e.item_name, e.count))
             .collect();
-        let thumb = match resolve_item_id(&kind, &entries[0].item_name).await {
-            Some(id) => thumbnail_if_available(&id).await,
-            None => None,
-        };
+        let thumb = resolve_item_id(&kind, &entries[0].item_name)
+            .await
+            .map(|id| thumbnail_url(&id));
         reply_embed_thumb(
             &ctx,
             &format!("Your top {}s", kind.as_str()),

@@ -44,8 +44,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             new PluginPageInfo
             {
                 Name = Name,
-                DisplayName = "Artist Suggestions",
+                DisplayName = "H4ip",
                 EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace),
+            },
+            new PluginPageInfo
+            {
+                Name = "h4ip-suggestions",
+                DisplayName = "Suggestions",
+                EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.suggestionsPage.html", GetType().Namespace),
                 EnableInMainMenu = true,
                 MenuIcon = "queue_music"
             }

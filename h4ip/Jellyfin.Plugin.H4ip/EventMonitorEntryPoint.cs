@@ -30,7 +30,6 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
     private readonly H4ipRepository _repository;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
-    private readonly HashSet<string> _announcedArtists = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<Guid> _existingItemIds = new();
     private readonly Channel<object> _eventQueue = Channel.CreateUnbounded<object>(new UnboundedChannelOptions { SingleReader = true });
     private readonly CancellationTokenSource _cts = new();
@@ -81,6 +80,7 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
         }
 
         _libraryManager.ItemAdded += OnItemAdded;
+        _libraryManager.ItemUpdated += OnItemUpdated;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
         _drainerTask = Task.Run(() => DrainEventsAsync(_cts.Token), CancellationToken.None);
 
@@ -107,6 +107,7 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _libraryManager.ItemAdded -= OnItemAdded;
+        _libraryManager.ItemUpdated -= OnItemUpdated;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
         await _cts.CancelAsync().ConfigureAwait(false);
         try
@@ -143,7 +144,6 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
         if (e.Item is MusicArtist artist)
         {
             _existingItemIds.Add(artist.Id);
-            _announcedArtists.Add(artist.Name);
             _logger.LogInformation("New artist added: {Artist}", artist.Name);
             PostEvent(new { kind = "artist_added", artist = artist.Name, itemId = artist.Id.ToString("N") });
             return;
@@ -154,6 +154,22 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
             _existingItemIds.Add(audio.Id);
             AnnounceTrack(audio);
         }
+    }
+
+    /// <summary>
+    /// Announces a track whose metadata changed, e.g. a new album added to an existing artist.
+    /// </summary>
+    /// <param name="sender">The sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnItemUpdated(object? sender, ItemChangeEventArgs e)
+    {
+        if (e.Item is not Audio audio || _existingItemIds.Contains(audio.Id))
+        {
+            return;
+        }
+
+        _existingItemIds.Add(audio.Id);
+        AnnounceTrack(audio);
     }
 
     /// <summary>
@@ -195,7 +211,7 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
     private void AnnounceTrack(Audio audio)
     {
         var artist = GetArtistName(audio);
-        if (string.IsNullOrEmpty(artist) || _announcedArtists.Contains(artist))
+        if (string.IsNullOrEmpty(artist))
         {
             return;
         }
@@ -270,9 +286,15 @@ public sealed class EventMonitorEntryPoint : IHostedService, IDisposable
         {
             using var client = _httpClientFactory.CreateClient();
             _logger.LogInformation("Broadcasting {Count} events to {Url}", batch.Count, config.BotUrl);
+            var baseUrl = config.BotUrl.TrimEnd('/');
+            if (!baseUrl.Contains("://", StringComparison.Ordinal))
+            {
+                baseUrl = "http://" + baseUrl;
+            }
+
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, $"{config.BotUrl}/jellyfin/event");
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/jellyfin/event");
                 request.Headers.Add("X-H4ip-Secret", config.SharedSecret);
                 request.Content = JsonContent.Create(batch);
                 using var response = await client.SendAsync(request, token).ConfigureAwait(false);

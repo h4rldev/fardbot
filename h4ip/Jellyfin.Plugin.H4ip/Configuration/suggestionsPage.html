@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Suggestions</title>
+    <style>
+        .suggestion-notes { width: 100%; margin-top: 0.4em; }
+        .suggestion-action { padding: 0.35em 0.75em; font-size: 0.85em; margin: 0 0.25em; }
+    </style>
+</head>
+<body>
+    <div id="H4ipSuggestionsPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
+        <div data-role="content">
+            <div class="content-primary">
+                <h2>Suggested Artists</h2>
+                <div id="suggestionList" class="paperList"></div>
+            </div>
+        </div>
+        <script type="text/javascript">
+            function loadSuggestions() {
+                return ApiClient.fetch({
+                    url: ApiClient.getUrl('h4ip/suggestions'),
+                    type: 'GET',
+                    dataType: 'json'
+                });
+            }
+
+            function renderSuggestions(items) {
+                const list = document.querySelector('#suggestionList');
+                list.innerHTML = '';
+                if (!items.length) {
+                    list.innerHTML = '<p class="sectionDescription">No pending suggestions.</p>';
+                    return;
+                }
+                items.forEach(function (item) {
+                    const div = document.createElement('div');
+                    div.className = 'listItem listItem-border';
+
+                    const body = document.createElement('span');
+                    body.className = 'listItemBody';
+
+                    const name = document.createElement('h3');
+                    name.textContent = item.Artist;
+
+                    const meta = document.createElement('div');
+                    meta.className = 'secondary';
+                    const count = item.Count > 1 ? ' · ' + item.Count + '× suggested' : '';
+                    meta.textContent = 'Suggested ' + new Date(item.AddedAt).toLocaleString() + count;
+
+                    const notes = document.createElement('textarea');
+                    notes.className = 'suggestion-notes';
+                    notes.rows = 2;
+                    notes.placeholder = 'Notes';
+                    notes.value = item.Notes || '';
+
+                    const save = document.createElement('button');
+                    save.type = 'button';
+                    save.setAttribute('is', 'emby-button');
+                    save.className = 'raised button-submit emby-button suggestion-action';
+                    save.textContent = 'Save notes';
+                    save.addEventListener('click', function () {
+                        ApiClient.fetch({
+                            url: ApiClient.getUrl('h4ip/suggestions/' + encodeURIComponent(item.Artist) + '/notes'),
+                            type: 'PUT',
+                            data: JSON.stringify({ notes: notes.value }),
+                            contentType: 'application/json'
+                        }).then(loadSuggestions).then(renderSuggestions);
+                    });
+
+                    const done = document.createElement('button');
+                    done.type = 'button';
+                    done.setAttribute('is', 'emby-button');
+                    done.className = 'raised button-submit emby-button suggestion-action';
+                    done.textContent = 'Done';
+                    done.addEventListener('click', function () {
+                        ApiClient.fetch({
+                            url: ApiClient.getUrl('h4ip/suggestions/' + encodeURIComponent(item.Artist)),
+                            type: 'DELETE'
+                        }).then(loadSuggestions).then(renderSuggestions);
+                    });
+
+                    const skip = document.createElement('button');
+                    skip.type = 'button';
+                    skip.setAttribute('is', 'emby-button');
+                    skip.className = 'raised emby-button suggestion-action';
+                    skip.textContent = 'Skip';
+                    skip.addEventListener('click', function () {
+                        ApiClient.fetch({
+                            url: ApiClient.getUrl('h4ip/suggestions/' + encodeURIComponent(item.Artist) + '/skip'),
+                            type: 'DELETE'
+                        }).then(loadSuggestions).then(renderSuggestions);
+                    });
+
+                    body.appendChild(name);
+                    body.appendChild(meta);
+                    body.appendChild(notes);
+                    div.appendChild(body);
+                    div.appendChild(skip);
+                    div.appendChild(save);
+                    div.appendChild(done);
+                    list.appendChild(div);
+                });
+            }
+
+            document.querySelector('#H4ipSuggestionsPage')
+                .addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    loadSuggestions().then(renderSuggestions).then(function () {
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+        </script>
+    </div>
+</body>
+</html>

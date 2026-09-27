@@ -6,7 +6,7 @@ with pkgs;
     buildInputs = [
       pkg-config
       openssl
-      dotnet-sdk_9
+      dotnet-sdk_10
       just
     ];
     RUST_BACKTRACE = 1;
