@@ -214,6 +214,30 @@ async fn current_audio(user_id: &str) -> Option<NowPlaying> {
         .cloned()
 }
 
+async fn most_recent_artist(user_id: &str) -> Option<String> {
+    if let Some(np) = current_audio(user_id).await
+        && let Some(artist) = np
+            .artists
+            .as_ref()
+            .and_then(|a| a.first().cloned())
+            .or_else(|| np.album_artist.clone())
+            .filter(|a| !a.is_empty())
+    {
+        return Some(artist);
+    }
+
+    let top: Vec<TopEntry> = jf_get(
+        "h4ip/top",
+        &[("user", user_id), ("kind", "artist"), ("limit", "1")],
+    )
+    .await
+    .ok()?;
+    top.into_iter()
+        .next()
+        .map(|e| e.item_name)
+        .filter(|a| !a.is_empty())
+}
+
 async fn resolve_item_id(kind: &ItemKind, name: &str) -> Option<String> {
     let search: SearchHints = jf_get("/Search/Hints", &[("searchTerm", name), ("limit", "5")])
         .await
@@ -280,22 +304,13 @@ pub async fn whoknows(
                 .await;
             };
 
-            match current_audio(&user_id)
-                .await
-                .and_then(|np| {
-                    np.artists
-                        .as_ref()
-                        .and_then(|a| a.first().cloned())
-                        .or_else(|| np.album_artist.clone())
-                })
-                .filter(|a| !a.is_empty())
-            {
+            match most_recent_artist(&user_id).await {
                 Some(artist) => artist,
                 None => {
                     return reply_embed(
                         &ctx,
                         "Whoknows",
-                        "You're not playing anything right now.".into(),
+                        "You haven't listened to anything yet.".into(),
                         true,
                     )
                     .await;
