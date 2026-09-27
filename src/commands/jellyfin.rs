@@ -98,6 +98,20 @@ struct TopEntry {
 }
 
 #[derive(Deserialize)]
+struct ItemsResponse {
+    #[serde(rename = "Items")]
+    items: Vec<MediaItem>,
+}
+
+#[derive(Deserialize)]
+struct MediaItem {
+    #[serde(rename = "Artists", default)]
+    artists: Vec<String>,
+    #[serde(rename = "AlbumArtist", default)]
+    album_artist: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct JFUser {
     #[serde(rename = "Id")]
     id: String,
@@ -226,15 +240,23 @@ async fn most_recent_artist(user_id: &str) -> Option<String> {
         return Some(artist);
     }
 
-    let top: Vec<TopEntry> = jf_get(
-        "h4ip/top",
-        &[("user", user_id), ("kind", "artist"), ("limit", "1")],
+    let recent: ItemsResponse = jf_get(
+        &format!("Users/{user_id}/Items"),
+        &[
+            ("SortBy", "DatePlayed"),
+            ("SortOrder", "Descending"),
+            ("Filters", "IsPlayed"),
+            ("IncludeItemTypes", "Audio"),
+            ("Limit", "1"),
+        ],
     )
     .await
     .ok()?;
-    top.into_iter()
+    recent
+        .items
+        .into_iter()
         .next()
-        .map(|e| e.item_name)
+        .and_then(|item| item.artists.into_iter().next().or(item.album_artist))
         .filter(|a| !a.is_empty())
 }
 
