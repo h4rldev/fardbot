@@ -11,8 +11,5 @@ category: "General"
 owner: "h4rl"
 artifacts:
 - "Jellyfin.Plugin.H4ip.dll"
-exclude:
-- "Microsoft.Data.Sqlite.dll"
-- "runtimes/**"
 changelog: >
   First release.
