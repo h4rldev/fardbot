@@ -52,7 +52,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 Name = "h4ip-suggestions",
                 DisplayName = "Suggestions",
                 EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.suggestionsPage.html", GetType().Namespace),
-                MenuSection = "Plugins",
+                EnableInMainMenu = true,
                 MenuIcon = "queue_music"
             }
             ];
